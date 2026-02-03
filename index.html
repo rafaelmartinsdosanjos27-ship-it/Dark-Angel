@@ -17,30 +17,30 @@
             --wa-input-bg: #2a3942;
         }
 
-        body { 
+        body, html { 
             font-family: 'Plus Jakarta Sans', sans-serif; 
-            background-color: var(--wa-bg); 
-            color: #e9edef; 
+            background-color: #000; 
             margin: 0; 
             padding: 0;
+            height: 100%;
+            width: 100%;
             overflow: hidden;
-            height: 100vh;
-            display: flex;
-            flex-direction: column;
         }
 
-        .app-shell {
+        /* Container que se adapta: 100% no mobile, fixo no PC */
+        .app-container {
             width: 100%;
             height: 100%;
             display: flex;
             flex-direction: column;
+            background-color: var(--wa-bg);
+            margin: 0 auto;
             position: relative;
         }
 
         @media (min-width: 768px) {
-            .app-shell {
-                max-width: 480px;
-                margin: 0 auto;
+            .app-container {
+                max-width: 500px;
                 border-left: 1px solid #222e35;
                 border-right: 1px solid #222e35;
             }
@@ -49,27 +49,24 @@
         .chat-wallpaper {
             background-image: url('https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png');
             background-repeat: repeat;
-            opacity: 0.05;
+            opacity: 0.06;
             position: absolute;
             inset: 0;
             z-index: 0;
             pointer-events: none;
         }
 
-        /* Área de Mensagens que cresce de baixo para cima */
-        #chat-box {
+        /* Área de mensagens com scroll corrigido */
+        #chat-content {
             flex: 1;
             overflow-y: auto;
-            padding: 15px;
             display: flex;
             flex-direction: column;
             z-index: 10;
+            padding: 12px;
+            scrollbar-width: none;
         }
-
-        /* Spacer para empurrar as mensagens para baixo quando há poucas */
-        .msg-spacer {
-            flex: 1 1 auto;
-        }
+        #chat-content::-webkit-scrollbar { display: none; }
 
         .bubble {
             max-width: 85%;
@@ -79,72 +76,75 @@
             position: relative;
             box-shadow: 0 1px 1px rgba(0,0,0,0.2);
             word-wrap: break-word;
+            animation: slideUp 0.2s ease-out;
         }
 
         .sent {
             background-color: var(--wa-sent);
             align-self: flex-end;
             border-radius: 12px 0px 12px 12px;
+            color: #fff;
         }
 
         .received {
             background-color: var(--wa-received);
             align-self: flex-start;
             border-radius: 0px 12px 12px 12px;
+            color: #e9edef;
         }
 
-        .wa-input-container {
-            padding: 10px;
+        /* Barra de baixo fixa */
+        .input-area {
             background-color: var(--wa-panel);
+            padding: 8px 12px;
             display: flex;
             align-items: center;
             gap: 8px;
             z-index: 50;
-            border-top: 1px solid rgba(255,255,255,0.05);
         }
 
-        .wa-input-field {
+        .input-wrapper {
             background-color: var(--wa-input-bg);
-            border-radius: 25px;
-            padding: 10px 16px;
-            flex: 1;
+            border-radius: 24px;
             display: flex;
             align-items: center;
+            flex: 1;
+            padding: 0 12px;
+            min-height: 44px;
         }
 
-        .wa-send-btn {
+        .send-btn {
             background-color: #00a884;
-            width: 48px;
-            height: 48px;
+            width: 44px;
+            height: 44px;
             border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
             color: white;
             border: none;
-            cursor: pointer;
             flex-shrink: 0;
+            cursor: pointer;
         }
 
-        .hide-scroll::-webkit-scrollbar { display: none; }
-        .animate-msg { animation: slideUp 0.15s ease-out; }
-        @keyframes slideUp { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes slideUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
     </style>
 </head>
 <body>
 
-    <div id="app" class="app-shell">
-        <div class="h-full flex items-center justify-center">
-            <div class="w-10 h-10 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin"></div>
+    <div id="app" class="app-container">
+        <!-- Loader inicial -->
+        <div class="flex-1 flex items-center justify-center">
+            <div class="w-8 h-8 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin"></div>
         </div>
     </div>
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-app.js";
-        import { getFirestore, doc, setDoc, getDoc, collection, addDoc, query, onSnapshot, serverTimestamp, orderBy, limit } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore.js";
+        import { getFirestore, doc, setDoc, collection, addDoc, query, onSnapshot, serverTimestamp, orderBy, limit } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore.js";
         import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-auth.js";
 
-        const MASTER_PASSWORD = "dark_angel";
+        const MASTER_KEY = "dark_angel";
         const firebaseConfig = {
             apiKey: "AIzaSyAAKqeX0Aq0n4OzgilX-5Q1PPVoSiPXCIc",
             authDomain: "chat-geral-a3bba.firebaseapp.com",
@@ -157,185 +157,166 @@
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
         const auth = getAuth(app);
-        const appRoot = document.getElementById('app');
+        const root = document.getElementById('app');
 
-        let myProfile = JSON.parse(localStorage.getItem('dark_angel_v17_profile'));
+        let myData = JSON.parse(localStorage.getItem('da_v18_user'));
 
-        async function init() {
-            try {
-                await signInAnonymously(auth);
-                if (sessionStorage.getItem('v17_auth') === 'true') {
-                    myProfile ? renderHome() : renderSetup();
-                } else {
-                    renderLogin();
+        async function start() {
+            await signInAnonymously(auth);
+            if (sessionStorage.getItem('da_v18_auth')) {
+                myData ? showDashboard() : showOnboarding();
+            } else {
+                showLock();
+            }
+        }
+
+        function showLock() {
+            root.innerHTML = `
+                <div class="flex-1 flex flex-col items-center justify-center p-10 text-center space-y-8">
+                    <div class="w-20 h-20 bg-emerald-600 rounded-3xl flex items-center justify-center shadow-2xl rotate-3">
+                        <i class="fa-solid fa-shield-halved text-white text-3xl"></i>
+                    </div>
+                    <div>
+                        <h1 class="text-white text-xl font-black italic uppercase tracking-widest">Dark Angel</h1>
+                        <p class="text-zinc-500 text-[10px] uppercase font-bold mt-1">Terminal de Acesso</p>
+                    </div>
+                    <div class="w-full space-y-3">
+                        <input type="password" id="key-in" placeholder="DIGITE A CHAVE" class="w-full bg-[#111b21] border border-white/5 p-4 rounded-xl text-center text-white outline-none focus:border-emerald-500 transition-all">
+                        <button id="key-btn" class="w-full bg-emerald-600 text-white py-4 rounded-xl font-black uppercase tracking-widest active:scale-95 transition-transform">Desbloquear</button>
+                    </div>
+                </div>`;
+            document.getElementById('key-btn').onclick = () => {
+                if (document.getElementById('key-in').value === MASTER_KEY) {
+                    sessionStorage.setItem('da_v18_auth', 'true');
+                    myData ? showDashboard() : showOnboarding();
                 }
-            } catch (e) { renderLogin(); }
-        }
-
-        function renderLogin() {
-            appRoot.innerHTML = `
-                <div class="h-full flex flex-col items-center justify-center p-8 bg-[#0b141a] text-center">
-                    <div class="w-20 h-20 bg-emerald-600 rounded-[2rem] flex items-center justify-center mb-6 shadow-xl">
-                        <i class="fa-solid fa-ghost text-white text-3xl"></i>
-                    </div>
-                    <h1 class="text-2xl font-black text-white italic tracking-tighter mb-8 uppercase">Dark Angel V17</h1>
-                    <div class="w-full space-y-4">
-                        <input type="password" id="p-in" placeholder="Palavra-passe" class="w-full bg-[#111b21] border border-white/10 p-4 rounded-xl text-center outline-none focus:border-emerald-500 text-white">
-                        <button id="b-login" class="w-full bg-emerald-600 text-white py-4 rounded-xl font-bold uppercase tracking-widest">Aceder</button>
-                    </div>
-                </div>`;
-            document.getElementById('b-login').onclick = () => {
-                if (document.getElementById('p-in').value === MASTER_PASSWORD) {
-                    sessionStorage.setItem('v17_auth', 'true');
-                    myProfile ? renderHome() : renderSetup();
-                } else alert("Incorreto.");
             };
         }
 
-        function renderSetup() {
-            appRoot.innerHTML = `
-                <div class="h-full flex flex-col items-center justify-center p-6 bg-[#0b141a]">
-                    <div class="bg-[#111b21] w-full p-8 rounded-3xl border border-white/5 text-center space-y-6">
-                        <h2 class="text-lg font-black uppercase text-emerald-500">Configurar Perfil</h2>
-                        <div class="relative w-24 h-24 mx-auto cursor-pointer" id="pick-img">
-                            <img id="prev" src="https://api.dicebear.com/7.x/avataaars/svg?seed=Dark" class="w-full h-full rounded-2xl object-cover bg-zinc-800">
-                            <input type="file" id="f-in" accept="image/*" class="hidden">
+        function showOnboarding() {
+            root.innerHTML = `
+                <div class="flex-1 flex flex-col items-center justify-center p-6 space-y-6">
+                    <div class="bg-[#111b21] w-full p-8 rounded-3xl border border-white/5 shadow-2xl">
+                        <h2 class="text-emerald-500 font-black text-center mb-6 uppercase italic">Nova Identidade</h2>
+                        <div class="w-24 h-24 mx-auto mb-6 bg-zinc-800 rounded-2xl overflow-hidden border-2 border-emerald-500/30">
+                            <img id="avatar-pre" src="https://api.dicebear.com/7.x/bottts/svg?seed=Dark" class="w-full h-full object-cover">
                         </div>
-                        <input type="text" id="n-in" placeholder="CODINOME" class="w-full bg-[#0b141a] border border-white/5 p-4 rounded-xl font-bold text-center uppercase text-white outline-none">
-                        <button id="b-save" class="w-full bg-emerald-600 text-white py-4 rounded-xl font-bold uppercase">Entrar</button>
+                        <input type="text" id="name-in" placeholder="TEU CODINOME" class="w-full bg-[#0b141a] border border-white/5 p-4 rounded-xl text-center text-white font-bold uppercase outline-none focus:border-emerald-500 mb-4">
+                        <button id="reg-btn" class="w-full bg-emerald-600 text-white py-4 rounded-xl font-black uppercase">Registrar</button>
                     </div>
                 </div>`;
-            
-            let selectedImg = null;
-            document.getElementById('pick-img').onclick = () => document.getElementById('f-in').click();
-            document.getElementById('f-in').onchange = (e) => {
-                const file = e.target.files[0];
-                const reader = new FileReader();
-                reader.onload = (ev) => {
-                    selectedImg = ev.target.result;
-                    document.getElementById('prev').src = selectedImg;
-                };
-                reader.readAsDataURL(file);
-            };
-
-            document.getElementById('b-save').onclick = () => {
-                const name = document.getElementById('n-in').value.trim().toUpperCase();
-                if (name.length < 2) return;
-                myProfile = { uid: auth.currentUser.uid, codename: name, photo: selectedImg || `https://api.dicebear.com/7.x/avataaars/svg?seed=${name}` };
-                localStorage.setItem('dark_angel_v17_profile', JSON.stringify(myProfile));
-                setDoc(doc(db, 'users', myProfile.uid), myProfile).catch(()=>{});
-                renderHome();
+            document.getElementById('reg-btn').onclick = () => {
+                const name = document.getElementById('name-in').value.trim().toUpperCase();
+                if(name.length < 2) return;
+                myData = { uid: auth.currentUser.uid, name, photo: `https://api.dicebear.com/7.x/bottts/svg?seed=${name}` };
+                localStorage.setItem('da_v18_user', JSON.stringify(myData));
+                setDoc(doc(db, 'users', myData.uid), myData);
+                showDashboard();
             };
         }
 
-        function renderHome() {
-            appRoot.innerHTML = `
-                <div class="flex flex-col h-full bg-[#0b141a]">
-                    <header class="p-4 bg-[#111b21] flex justify-between items-center border-b border-white/5">
+        function showDashboard() {
+            root.innerHTML = `
+                <div class="flex flex-col h-full">
+                    <header class="p-4 bg-[#111b21] flex justify-between items-center shadow-md z-30">
                         <div class="flex items-center gap-3">
-                            <img src="${myProfile.photo}" class="w-10 h-10 rounded-full object-cover">
-                            <h3 class="text-sm font-bold text-white uppercase italic">${myProfile.codename}</h3>
+                            <img src="${myData.photo}" class="w-10 h-10 rounded-full border border-emerald-500/50">
+                            <span class="text-white font-bold text-sm italic uppercase">${myData.name}</span>
                         </div>
-                        <i class="fa-solid fa-power-off text-zinc-500" onclick="location.reload()"></i>
+                        <i class="fa-solid fa-ghost text-emerald-500"></i>
                     </header>
-                    <div class="flex-1 overflow-y-auto p-4 space-y-3 hide-scroll">
-                        <div id="btn-global" class="p-4 bg-emerald-600/10 border border-emerald-500/20 rounded-2xl flex items-center gap-4 cursor-pointer">
-                            <div class="w-12 h-12 bg-emerald-600 rounded-full flex items-center justify-center text-white text-xl shadow-lg">
-                                <i class="fa-solid fa-globe"></i>
-                            </div>
+                    <div class="flex-1 overflow-y-auto p-4 space-y-4">
+                        <div id="btn-g" class="p-5 bg-emerald-600/10 border border-emerald-500/20 rounded-2xl flex items-center gap-4 cursor-pointer active:bg-emerald-600/20">
+                            <div class="w-12 h-12 bg-emerald-600 rounded-full flex items-center justify-center text-white shadow-lg"><i class="fa-solid fa-satellite-dish"></i></div>
                             <div>
-                                <h4 class="font-black text-emerald-400 italic uppercase">Frequência Global</h4>
-                                <p class="text-[9px] text-zinc-500 font-bold uppercase tracking-widest">Todos os Agentes</p>
+                                <h3 class="text-emerald-400 font-black italic uppercase">Frequência Global</h3>
+                                <p class="text-[9px] text-zinc-500 font-bold uppercase">Canal Aberto</p>
                             </div>
                         </div>
-                        <div id="u-list"></div>
+                        <div id="user-list" class="space-y-1"></div>
                     </div>
                 </div>`;
 
-            document.getElementById('btn-global').onclick = () => renderChat('global');
+            document.getElementById('btn-g').onclick = () => openChat('global');
             onSnapshot(collection(db, 'users'), (snap) => {
-                const list = document.getElementById('u-list');
+                const list = document.getElementById('user-list');
                 if(!list) return;
-                list.innerHTML = '<p class="text-[10px] font-black text-zinc-600 uppercase tracking-[0.2em] my-4 ml-1">Mensagens Privadas</p>';
+                list.innerHTML = '<p class="text-[10px] font-black text-zinc-600 uppercase tracking-widest my-4">Agentes Disponíveis</p>';
                 snap.forEach(d => {
                     const u = d.data();
-                    if(u.uid === myProfile.uid) return;
-                    const el = document.createElement('div');
-                    el.className = "flex items-center gap-4 p-3 hover:bg-[#111b21] rounded-xl cursor-pointer transition-all mb-1";
-                    el.innerHTML = `<img src="${u.photo}" class="w-12 h-12 rounded-full object-cover shadow-md"><div class="flex-1 border-b border-white/5 pb-3"><div class="font-bold text-zinc-200 text-sm uppercase italic">${u.codename}</div><div class="text-[10px] text-emerald-500 font-bold uppercase">Online</div></div>`;
-                    el.onclick = () => renderChat('dm', u);
-                    list.appendChild(el);
+                    if(u.uid === myData.uid) return;
+                    const div = document.createElement('div');
+                    div.className = "flex items-center gap-4 p-3 hover:bg-[#111b21] rounded-xl cursor-pointer active:bg-[#111b21]";
+                    div.innerHTML = `<img src="${u.photo}" class="w-12 h-12 rounded-full"><div class="flex-1 border-b border-white/5 pb-2"><div class="text-white font-bold uppercase italic text-sm">${u.name}</div><div class="text-[10px] text-emerald-500 uppercase font-black">Online</div></div>`;
+                    div.onclick = () => openChat('dm', u);
+                    list.appendChild(div);
                 });
             });
         }
 
-        function renderChat(type, target = null) {
-            appRoot.innerHTML = `
+        function openChat(type, target = null) {
+            root.innerHTML = `
                 <div class="flex flex-col h-full relative">
                     <div class="chat-wallpaper"></div>
-                    <header class="p-3 bg-[#111b21] flex items-center gap-3 border-b border-white/5 z-20">
-                        <button id="b-back" class="p-2 text-zinc-400"><i class="fa-solid fa-arrow-left"></i></button>
-                        <img src="${type === 'global' ? 'https://api.dicebear.com/7.x/shapes/svg?seed=global' : target.photo}" class="w-10 h-10 rounded-full object-cover">
+                    <header class="p-3 bg-[#111b21] flex items-center gap-3 shadow-lg z-20">
+                        <button id="chat-back" class="p-2 text-zinc-400"><i class="fa-solid fa-chevron-left"></i></button>
+                        <img src="${type === 'global' ? 'https://api.dicebear.com/7.x/shapes/svg?seed=G' : target.photo}" class="w-10 h-10 rounded-full border border-emerald-500/30">
                         <div class="flex-1">
-                            <h4 class="text-sm font-black uppercase text-white italic truncate">${type === 'global' ? 'Broadcast Global' : target.codename}</h4>
-                            <span class="text-[9px] text-emerald-500 font-black uppercase tracking-widest">Encriptado</span>
+                            <h2 class="text-white font-black text-sm uppercase italic truncate">${type === 'global' ? 'Broadcast Global' : target.name}</h2>
+                            <span class="text-[9px] text-emerald-500 font-bold uppercase">Conexão Segura</span>
                         </div>
                     </header>
                     
-                    <div id="chat-box" class="hide-scroll">
-                        <div class="msg-spacer"></div>
-                        <div id="msg-container" class="flex flex-col"></div>
-                    </div>
+                    <div id="chat-content"></div>
                     
-                    <div class="wa-input-container">
-                        <div class="wa-input-field">
-                            <i class="fa-regular fa-face-smile text-zinc-400 mr-3 text-xl"></i>
-                            <input type="text" id="m-input" placeholder="Escreve aqui..." class="flex-1 bg-transparent border-none outline-none text-white text-[16px]" autocomplete="off">
-                            <i class="fa-solid fa-paperclip text-zinc-400 ml-2 rotate-45"></i>
+                    <div class="input-area">
+                        <div class="input-wrapper">
+                            <i class="fa-regular fa-face-smile text-zinc-400 mr-2 text-lg"></i>
+                            <input type="text" id="msg-in" placeholder="Mensagem" class="flex-1 bg-transparent border-none outline-none text-white text-[16px] py-2" autocomplete="off">
                         </div>
-                        <button id="b-send" class="wa-send-btn">
-                            <i class="fa-solid fa-paper-plane"></i>
+                        <button id="msg-btn" class="send-btn">
+                            <i class="fa-solid fa-paper-plane text-sm"></i>
                         </button>
                     </div>
                 </div>`;
 
-            document.getElementById('b-back').onclick = renderHome;
-            const path = type === 'global' ? 'v17_global' : `v17_dm_${[myProfile.uid, target.uid].sort().join('_')}`;
+            document.getElementById('chat-back').onclick = showDashboard;
+            const channel = type === 'global' ? 'v18_global' : `v18_dm_${[myData.uid, target.uid].sort().join('_')}`;
             
-            onSnapshot(query(collection(db, path), orderBy('timestamp', 'asc'), limit(80)), (snap) => {
-                const container = document.getElementById('msg-container');
-                const box = document.getElementById('chat-box');
-                if (!container) return;
-                container.innerHTML = '';
+            onSnapshot(query(collection(db, channel), orderBy('timestamp', 'asc'), limit(100)), (snap) => {
+                const box = document.getElementById('chat-content');
+                if(!box) return;
+                box.innerHTML = '';
                 snap.forEach(d => {
                     const m = d.data();
-                    const isMe = m.sid === myProfile.uid;
-                    const div = document.createElement('div');
-                    div.className = `bubble ${isMe ? 'sent' : 'received'} animate-msg`;
-                    div.innerHTML = `
+                    const isMe = m.sid === myData.uid;
+                    const el = document.createElement('div');
+                    el.className = `bubble ${isMe ? 'sent' : 'received'}`;
+                    el.innerHTML = `
                         ${!isMe ? `<div class="text-[10px] font-black text-emerald-400 uppercase italic mb-1">${m.author}</div>` : ''}
-                        <div class="text-zinc-100">${m.txt}</div>
-                        <div class="flex justify-end items-center gap-1 mt-1 opacity-60">
-                            <span class="text-[8px] font-bold">${m.timestamp ? new Date(m.timestamp.toDate()).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : ''}</span>
-                            ${isMe ? '<i class="fa-solid fa-check-double text-[9px] text-sky-400"></i>' : ''}
+                        <div>${m.text}</div>
+                        <div class="flex justify-end mt-1 items-center gap-1">
+                            <span class="text-[8px] text-zinc-400 font-bold uppercase">${m.timestamp ? new Date(m.timestamp.toDate()).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) : ''}</span>
+                            ${isMe ? '<i class="fa-solid fa-check-double text-[8px] text-sky-400"></i>' : ''}
                         </div>`;
-                    container.appendChild(div);
+                    box.appendChild(el);
                 });
                 box.scrollTop = box.scrollHeight;
             });
 
-            const sendMsg = () => {
-                const i = document.getElementById('m-input');
-                if (!i.value.trim()) return;
-                addDoc(collection(db, path), { txt: i.value, sid: myProfile.uid, author: myProfile.codename, timestamp: serverTimestamp() });
-                i.value = '';
+            const send = async () => {
+                const input = document.getElementById('msg-in');
+                const val = input.value.trim();
+                if(!val) return;
+                input.value = '';
+                await addDoc(collection(db, channel), { text: val, sid: myData.uid, author: myData.name, timestamp: serverTimestamp() });
             };
 
-            document.getElementById('b-send').onclick = sendMsg;
-            document.getElementById('m-input').onkeypress = (e) => { if(e.key === 'Enter') sendMsg(); };
+            document.getElementById('msg-btn').onclick = send;
+            document.getElementById('msg-in').onkeypress = (e) => { if(e.key === 'Enter') send(); };
         }
 
-        init();
+        start();
     </script>
 </body>
 </html>
