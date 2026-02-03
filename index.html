@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Dark Angel - Elite Terminal</title>
+    <title>Dark Angel - Elite</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
@@ -14,7 +14,7 @@
             --wa-panel: #111b21;
             --wa-sent: #005c4b;
             --wa-received: #202c33;
-            --accent: #6366f1;
+            --wa-input-bg: #2a3942;
         }
 
         body { 
@@ -25,17 +25,28 @@
             padding: 0;
             overflow: hidden;
             height: 100vh;
-            height: -webkit-fill-available;
-        }
-
-        #app {
-            height: 100vh;
-            height: -webkit-fill-available;
             display: flex;
             flex-direction: column;
         }
 
-        .chat-bg {
+        .app-shell {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+        }
+
+        @media (min-width: 768px) {
+            .app-shell {
+                max-width: 480px;
+                margin: 0 auto;
+                border-left: 1px solid #222e35;
+                border-right: 1px solid #222e35;
+            }
+        }
+
+        .chat-wallpaper {
             background-image: url('https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png');
             background-repeat: repeat;
             opacity: 0.05;
@@ -45,70 +56,95 @@
             pointer-events: none;
         }
 
-        .bubble-sent {
+        /* Área de Mensagens que cresce de baixo para cima */
+        #chat-box {
+            flex: 1;
+            overflow-y: auto;
+            padding: 15px;
+            display: flex;
+            flex-direction: column;
+            z-index: 10;
+        }
+
+        /* Spacer para empurrar as mensagens para baixo quando há poucas */
+        .msg-spacer {
+            flex: 1 1 auto;
+        }
+
+        .bubble {
+            max-width: 85%;
+            padding: 8px 12px;
+            font-size: 15px;
+            margin-bottom: 8px;
+            position: relative;
+            box-shadow: 0 1px 1px rgba(0,0,0,0.2);
+            word-wrap: break-word;
+        }
+
+        .sent {
             background-color: var(--wa-sent);
+            align-self: flex-end;
             border-radius: 12px 0px 12px 12px;
-            position: relative;
-            box-shadow: 0 1px 0.5px rgba(0,0,0,0.13);
-        }
-        .bubble-sent::after {
-            content: "";
-            position: absolute;
-            top: 0; right: -8px;
-            border-left: 10px solid var(--wa-sent);
-            border-bottom: 10px solid transparent;
         }
 
-        .bubble-received {
+        .received {
             background-color: var(--wa-received);
+            align-self: flex-start;
             border-radius: 0px 12px 12px 12px;
-            position: relative;
-            box-shadow: 0 1px 0.5px rgba(0,0,0,0.13);
-        }
-        .bubble-received::after {
-            content: "";
-            position: absolute;
-            top: 0; left: -8px;
-            border-right: 10px solid var(--wa-received);
-            border-bottom: 10px solid transparent;
         }
 
-        .btn-press:active { transform: scale(0.96); }
+        .wa-input-container {
+            padding: 10px;
+            background-color: var(--wa-panel);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            z-index: 50;
+            border-top: 1px solid rgba(255,255,255,0.05);
+        }
+
+        .wa-input-field {
+            background-color: var(--wa-input-bg);
+            border-radius: 25px;
+            padding: 10px 16px;
+            flex: 1;
+            display: flex;
+            align-items: center;
+        }
+
+        .wa-send-btn {
+            background-color: #00a884;
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            border: none;
+            cursor: pointer;
+            flex-shrink: 0;
+        }
+
         .hide-scroll::-webkit-scrollbar { display: none; }
-        
-        .animate-pop { animation: pop 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
-        @keyframes pop { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
-
-        /* Ajustes para telas grandes */
-        @media (min-width: 768px) {
-            .app-container {
-                max-width: 500px;
-                margin: 0 auto;
-                border-left: 1px solid #202c33;
-                border-right: 1px solid #202c33;
-                position: relative;
-                box-shadow: 0 0 50px rgba(0,0,0,0.5);
-            }
-        }
+        .animate-msg { animation: slideUp 0.15s ease-out; }
+        @keyframes slideUp { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
     </style>
 </head>
 <body>
 
-    <div id="app" class="app-container">
-        <!-- Loader -->
-        <div class="h-full flex flex-col items-center justify-center bg-[#0b141a]">
-            <div class="w-12 h-12 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
+    <div id="app" class="app-shell">
+        <div class="h-full flex items-center justify-center">
+            <div class="w-10 h-10 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin"></div>
         </div>
     </div>
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-app.js";
-        import { getFirestore, doc, setDoc, getDoc, collection, addDoc, query, onSnapshot, serverTimestamp, orderBy, limit, deleteDoc } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore.js";
+        import { getFirestore, doc, setDoc, getDoc, collection, addDoc, query, onSnapshot, serverTimestamp, orderBy, limit } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore.js";
         import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-auth.js";
 
         const MASTER_PASSWORD = "dark_angel";
-        const ADMIN_NAME = "RAFAEL"; 
-        
         const firebaseConfig = {
             apiKey: "AIzaSyAAKqeX0Aq0n4OzgilX-5Q1PPVoSiPXCIc",
             authDomain: "chat-geral-a3bba.firebaseapp.com",
@@ -121,153 +157,112 @@
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
         const auth = getAuth(app);
-        const appContainer = document.getElementById('app');
+        const appRoot = document.getElementById('app');
 
-        let myProfile = JSON.parse(localStorage.getItem('dark_angel_v15_profile')) || null;
-        let selectedImg = null;
+        let myProfile = JSON.parse(localStorage.getItem('dark_angel_v17_profile'));
 
         async function init() {
             try {
                 await signInAnonymously(auth);
-                if (sessionStorage.getItem('v15_auth') === 'true') {
+                if (sessionStorage.getItem('v17_auth') === 'true') {
                     myProfile ? renderHome() : renderSetup();
                 } else {
                     renderLogin();
                 }
-            } catch (e) {
-                renderLogin();
-            }
+            } catch (e) { renderLogin(); }
         }
 
         function renderLogin() {
-            appContainer.innerHTML = `
-                <div class="h-full flex flex-col items-center justify-center p-8 space-y-10 animate-pop bg-[#0b141a]">
-                    <div class="text-center">
-                        <div class="w-20 h-20 bg-indigo-600 rounded-[2.2rem] flex items-center justify-center mx-auto mb-6 shadow-2xl shadow-indigo-600/30">
-                            <i class="fa-solid fa-bolt-lightning text-white text-3xl"></i>
-                        </div>
-                        <h1 class="text-3xl font-black tracking-tighter italic uppercase text-white">Dark Angel</h1>
-                        <p class="text-[10px] text-zinc-500 tracking-[0.4em] mt-2 uppercase">Acesso Restrito</p>
+            appRoot.innerHTML = `
+                <div class="h-full flex flex-col items-center justify-center p-8 bg-[#0b141a] text-center">
+                    <div class="w-20 h-20 bg-emerald-600 rounded-[2rem] flex items-center justify-center mb-6 shadow-xl">
+                        <i class="fa-solid fa-ghost text-white text-3xl"></i>
                     </div>
+                    <h1 class="text-2xl font-black text-white italic tracking-tighter mb-8 uppercase">Dark Angel V17</h1>
                     <div class="w-full space-y-4">
-                        <input type="password" id="p-in" placeholder="Chave de Segurança" class="w-full bg-[#111b21] border border-zinc-800 p-5 rounded-2xl font-bold text-center outline-none focus:border-indigo-500 text-white shadow-inner">
-                        <button id="b-login" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white py-5 rounded-2xl font-black uppercase tracking-widest btn-press shadow-xl transition-all">Entrar no Terminal</button>
+                        <input type="password" id="p-in" placeholder="Palavra-passe" class="w-full bg-[#111b21] border border-white/10 p-4 rounded-xl text-center outline-none focus:border-emerald-500 text-white">
+                        <button id="b-login" class="w-full bg-emerald-600 text-white py-4 rounded-xl font-bold uppercase tracking-widest">Aceder</button>
                     </div>
                 </div>`;
             document.getElementById('b-login').onclick = () => {
                 if (document.getElementById('p-in').value === MASTER_PASSWORD) {
-                    sessionStorage.setItem('v15_auth', 'true');
+                    sessionStorage.setItem('v17_auth', 'true');
                     myProfile ? renderHome() : renderSetup();
-                } else alert("Chave incorreta.");
+                } else alert("Incorreto.");
             };
         }
 
         function renderSetup() {
-            appContainer.innerHTML = `
-                <div class="h-full flex flex-col items-center justify-center p-6 bg-[#0b141a] animate-pop">
-                    <div class="bg-[#111b21] w-full p-8 rounded-[3rem] border border-zinc-800 text-center space-y-6 shadow-2xl">
-                        <h2 class="text-xl font-extrabold uppercase italic text-indigo-500 tracking-tight">Criar Identidade</h2>
-                        <div class="relative w-28 h-28 mx-auto cursor-pointer" id="pick-img">
-                            <img id="prev" src="https://api.dicebear.com/7.x/avataaars/svg?seed=Dark" class="w-full h-full rounded-[2rem] object-cover border-2 border-indigo-500/30 bg-zinc-800 shadow-lg">
-                            <div class="absolute -bottom-1 -right-1 bg-indigo-600 w-9 h-9 rounded-full flex items-center justify-center border-4 border-[#111b21]">
-                                <i class="fa-solid fa-camera text-[12px] text-white"></i>
-                            </div>
+            appRoot.innerHTML = `
+                <div class="h-full flex flex-col items-center justify-center p-6 bg-[#0b141a]">
+                    <div class="bg-[#111b21] w-full p-8 rounded-3xl border border-white/5 text-center space-y-6">
+                        <h2 class="text-lg font-black uppercase text-emerald-500">Configurar Perfil</h2>
+                        <div class="relative w-24 h-24 mx-auto cursor-pointer" id="pick-img">
+                            <img id="prev" src="https://api.dicebear.com/7.x/avataaars/svg?seed=Dark" class="w-full h-full rounded-2xl object-cover bg-zinc-800">
                             <input type="file" id="f-in" accept="image/*" class="hidden">
                         </div>
-                        <input type="text" id="n-in" placeholder="TEU NOME" class="w-full bg-[#0b141a] border border-zinc-800 p-4 rounded-2xl font-extrabold outline-none focus:border-indigo-500 text-center uppercase text-white">
-                        <button id="b-save" class="w-full bg-white text-black py-5 rounded-2xl font-black uppercase tracking-widest btn-press">Iniciar Sessão</button>
+                        <input type="text" id="n-in" placeholder="CODINOME" class="w-full bg-[#0b141a] border border-white/5 p-4 rounded-xl font-bold text-center uppercase text-white outline-none">
+                        <button id="b-save" class="w-full bg-emerald-600 text-white py-4 rounded-xl font-bold uppercase">Entrar</button>
                     </div>
                 </div>`;
-
+            
+            let selectedImg = null;
             document.getElementById('pick-img').onclick = () => document.getElementById('f-in').click();
             document.getElementById('f-in').onchange = (e) => {
                 const file = e.target.files[0];
-                if (!file) return;
                 const reader = new FileReader();
                 reader.onload = (ev) => {
-                    const img = new Image();
-                    img.onload = () => {
-                        const canvas = document.createElement('canvas');
-                        canvas.width = 150; canvas.height = 150;
-                        canvas.getContext('2d').drawImage(img, 0, 0, 150, 150);
-                        selectedImg = canvas.toDataURL('image/jpeg', 0.7);
-                        document.getElementById('prev').src = selectedImg;
-                    };
-                    img.src = ev.target.result;
+                    selectedImg = ev.target.result;
+                    document.getElementById('prev').src = selectedImg;
                 };
                 reader.readAsDataURL(file);
             };
 
-            document.getElementById('b-save').onclick = async () => {
+            document.getElementById('b-save').onclick = () => {
                 const name = document.getElementById('n-in').value.trim().toUpperCase();
-                if (name.length < 2) return alert("Nome muito curto!");
-                
-                myProfile = {
-                    uid: auth.currentUser.uid,
-                    codename: name,
-                    photo: selectedImg || `https://api.dicebear.com/7.x/avataaars/svg?seed=${name}`,
-                    isAdmin: name === ADMIN_NAME
-                };
-
-                localStorage.setItem('dark_angel_v15_profile', JSON.stringify(myProfile));
-                setDoc(doc(db, 'users', myProfile.uid), myProfile).catch(() => {});
+                if (name.length < 2) return;
+                myProfile = { uid: auth.currentUser.uid, codename: name, photo: selectedImg || `https://api.dicebear.com/7.x/avataaars/svg?seed=${name}` };
+                localStorage.setItem('dark_angel_v17_profile', JSON.stringify(myProfile));
+                setDoc(doc(db, 'users', myProfile.uid), myProfile).catch(()=>{});
                 renderHome();
             };
         }
 
         function renderHome() {
-            appContainer.innerHTML = `
-                <div class="flex flex-col h-full bg-[#0b141a] animate-pop">
-                    <header class="p-5 flex justify-between items-center bg-[#111b21] border-b border-white/5 shadow-md z-20">
+            appRoot.innerHTML = `
+                <div class="flex flex-col h-full bg-[#0b141a]">
+                    <header class="p-4 bg-[#111b21] flex justify-between items-center border-b border-white/5">
                         <div class="flex items-center gap-3">
-                            <img src="${myProfile.photo}" class="w-11 h-11 rounded-xl object-cover border border-white/10 shadow-sm">
-                            <div>
-                                <h3 class="text-[13px] font-black text-white leading-none uppercase italic">${myProfile.codename}</h3>
-                                <span class="text-[9px] text-emerald-500 font-bold uppercase tracking-wider">Disponível</span>
-                            </div>
+                            <img src="${myProfile.photo}" class="w-10 h-10 rounded-full object-cover">
+                            <h3 class="text-sm font-bold text-white uppercase italic">${myProfile.codename}</h3>
                         </div>
-                        <button id="b-logout" class="w-9 h-9 rounded-lg bg-zinc-800/40 flex items-center justify-center text-zinc-400">
-                            <i class="fa-solid fa-power-off text-sm"></i>
-                        </button>
+                        <i class="fa-solid fa-power-off text-zinc-500" onclick="location.reload()"></i>
                     </header>
-                    <div class="flex-1 overflow-y-auto p-4 space-y-4 hide-scroll relative z-10">
-                        <div id="b-global" class="p-6 rounded-[2.5rem] bg-indigo-600 flex items-center gap-4 btn-press cursor-pointer shadow-xl border border-indigo-400/20">
-                            <div class="w-14 h-14 bg-white/20 rounded-2xl flex items-center justify-center text-2xl shadow-inner">
-                                <i class="fa-solid fa-earth-europe text-white"></i>
+                    <div class="flex-1 overflow-y-auto p-4 space-y-3 hide-scroll">
+                        <div id="btn-global" class="p-4 bg-emerald-600/10 border border-emerald-500/20 rounded-2xl flex items-center gap-4 cursor-pointer">
+                            <div class="w-12 h-12 bg-emerald-600 rounded-full flex items-center justify-center text-white text-xl shadow-lg">
+                                <i class="fa-solid fa-globe"></i>
                             </div>
-                            <div class="flex-1">
-                                <h4 class="font-black uppercase italic text-white text-lg tracking-tight">Chat Geral</h4>
-                                <p class="text-[10px] text-indigo-100 font-bold opacity-80 uppercase tracking-tighter">Frequência Unificada</p>
+                            <div>
+                                <h4 class="font-black text-emerald-400 italic uppercase">Frequência Global</h4>
+                                <p class="text-[9px] text-zinc-500 font-bold uppercase tracking-widest">Todos os Agentes</p>
                             </div>
-                            <i class="fa-solid fa-chevron-right text-white/40"></i>
                         </div>
-                        
-                        <div id="u-list" class="space-y-2 pt-2">
-                             <p class="text-[10px] font-black text-zinc-600 uppercase tracking-[0.2em] mb-4 ml-1">Contatos Privados</p>
-                        </div>
+                        <div id="u-list"></div>
                     </div>
                 </div>`;
 
-            document.getElementById('b-global').onclick = () => renderChat('global');
-            document.getElementById('b-logout').onclick = () => { sessionStorage.clear(); location.reload(); };
-
+            document.getElementById('btn-global').onclick = () => renderChat('global');
             onSnapshot(collection(db, 'users'), (snap) => {
                 const list = document.getElementById('u-list');
-                if (!list) return;
-                list.innerHTML = '<p class="text-[10px] font-black text-zinc-600 uppercase tracking-[0.2em] mb-4 ml-1">Contatos Privados</p>';
+                if(!list) return;
+                list.innerHTML = '<p class="text-[10px] font-black text-zinc-600 uppercase tracking-[0.2em] my-4 ml-1">Mensagens Privadas</p>';
                 snap.forEach(d => {
                     const u = d.data();
-                    if (u.uid === myProfile.uid) return;
+                    if(u.uid === myProfile.uid) return;
                     const el = document.createElement('div');
-                    el.className = "flex items-center gap-4 p-4 rounded-2xl bg-[#111b21] border border-white/5 btn-press cursor-pointer active:bg-[#182229]";
-                    el.innerHTML = `
-                        <img src="${u.photo}" class="w-12 h-12 rounded-xl object-cover shadow-sm bg-zinc-800">
-                        <div class="flex-1">
-                            <div class="font-bold text-sm text-zinc-100 uppercase italic">@${u.codename}</div>
-                            <div class="text-[9px] text-zinc-500 uppercase font-black tracking-tight">Iniciar Conversa</div>
-                        </div>
-                        <i class="fa-solid fa-comment-dots text-zinc-700"></i>
-                    `;
+                    el.className = "flex items-center gap-4 p-3 hover:bg-[#111b21] rounded-xl cursor-pointer transition-all mb-1";
+                    el.innerHTML = `<img src="${u.photo}" class="w-12 h-12 rounded-full object-cover shadow-md"><div class="flex-1 border-b border-white/5 pb-3"><div class="font-bold text-zinc-200 text-sm uppercase italic">${u.codename}</div><div class="text-[10px] text-emerald-500 font-bold uppercase">Online</div></div>`;
                     el.onclick = () => renderChat('dm', u);
                     list.appendChild(el);
                 });
@@ -275,82 +270,69 @@
         }
 
         function renderChat(type, target = null) {
-            appContainer.innerHTML = `
-                <div class="flex flex-col h-full bg-[#0b141a] relative animate-pop">
-                    <div class="chat-bg"></div>
-                    <header class="p-4 bg-[#111b21] flex items-center gap-4 border-b border-white/5 z-20 shadow-lg">
+            appRoot.innerHTML = `
+                <div class="flex flex-col h-full relative">
+                    <div class="chat-wallpaper"></div>
+                    <header class="p-3 bg-[#111b21] flex items-center gap-3 border-b border-white/5 z-20">
                         <button id="b-back" class="p-2 text-zinc-400"><i class="fa-solid fa-arrow-left"></i></button>
-                        <img src="${type === 'global' ? 'https://api.dicebear.com/7.x/shapes/svg?seed=global' : target.photo}" class="w-10 h-10 rounded-xl object-cover shadow-sm bg-zinc-800">
-                        <div class="flex-1 min-w-0">
-                            <h4 class="text-[13px] font-black uppercase text-white truncate">${type === 'global' ? 'Broadcast Global' : target.codename}</h4>
-                            <span class="text-[9px] text-indigo-500 font-black uppercase tracking-widest block truncate">${type === 'global' ? 'Todos Online' : 'Chat Seguro'}</span>
+                        <img src="${type === 'global' ? 'https://api.dicebear.com/7.x/shapes/svg?seed=global' : target.photo}" class="w-10 h-10 rounded-full object-cover">
+                        <div class="flex-1">
+                            <h4 class="text-sm font-black uppercase text-white italic truncate">${type === 'global' ? 'Broadcast Global' : target.codename}</h4>
+                            <span class="text-[9px] text-emerald-500 font-black uppercase tracking-widest">Encriptado</span>
                         </div>
                     </header>
                     
-                    <div id="chat-box" class="flex-1 overflow-y-auto p-4 space-y-3 hide-scroll z-10 flex flex-col pt-6"></div>
+                    <div id="chat-box" class="hide-scroll">
+                        <div class="msg-spacer"></div>
+                        <div id="msg-container" class="flex flex-col"></div>
+                    </div>
                     
-                    <form id="msg-form" class="p-4 bg-[#111b21] border-t border-white/5 z-20 pb-6 md:pb-4">
-                        <div class="flex items-center gap-2 bg-[#202c33] px-4 py-1 rounded-2xl border border-white/5 focus-within:border-indigo-500/50 shadow-inner">
-                            <input type="text" id="m-input" placeholder="Escreve aqui..." class="flex-1 bg-transparent border-none outline-none py-3 text-[15px] text-white" autocomplete="off">
-                            <button type="submit" class="w-10 h-10 flex items-center justify-center text-indigo-400 btn-press">
-                                <i class="fa-solid fa-paper-plane text-lg"></i>
-                            </button>
+                    <div class="wa-input-container">
+                        <div class="wa-input-field">
+                            <i class="fa-regular fa-face-smile text-zinc-400 mr-3 text-xl"></i>
+                            <input type="text" id="m-input" placeholder="Escreve aqui..." class="flex-1 bg-transparent border-none outline-none text-white text-[16px]" autocomplete="off">
+                            <i class="fa-solid fa-paperclip text-zinc-400 ml-2 rotate-45"></i>
                         </div>
-                    </form>
+                        <button id="b-send" class="wa-send-btn">
+                            <i class="fa-solid fa-paper-plane"></i>
+                        </button>
+                    </div>
                 </div>`;
 
             document.getElementById('b-back').onclick = renderHome;
-            const path = type === 'global' ? 'v15_global' : `v15_dm_${[myProfile.uid, target.uid].sort().join('_')}`;
+            const path = type === 'global' ? 'v17_global' : `v17_dm_${[myProfile.uid, target.uid].sort().join('_')}`;
             
             onSnapshot(query(collection(db, path), orderBy('timestamp', 'asc'), limit(80)), (snap) => {
+                const container = document.getElementById('msg-container');
                 const box = document.getElementById('chat-box');
-                if (!box) return;
-                box.innerHTML = '';
+                if (!container) return;
+                container.innerHTML = '';
                 snap.forEach(d => {
                     const m = d.data();
                     const isMe = m.sid === myProfile.uid;
-                    const msgId = d.id;
-                    
                     const div = document.createElement('div');
-                    div.className = `flex ${isMe ? 'justify-end' : 'justify-start'} w-full animate-pop mb-1`;
+                    div.className = `bubble ${isMe ? 'sent' : 'received'} animate-msg`;
                     div.innerHTML = `
-                        <div class="${isMe ? 'bubble-sent' : 'bubble-received'} max-w-[85%] px-3 py-2 shadow-sm relative group">
-                            ${!isMe ? `<p class="text-[9px] font-black text-indigo-400 mb-0.5 uppercase tracking-tighter">${m.author}</p>` : ''}
-                            <div class="text-[14px] leading-snug text-zinc-100 pr-5 break-words">${m.txt}</div>
-                            <div class="flex justify-end items-center gap-1 mt-0.5">
-                                <span class="text-[8px] text-zinc-500 font-bold">${m.timestamp ? new Date(m.timestamp.toDate()).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '--:--'}</span>
-                                ${isMe ? '<i class="fa-solid fa-check text-[8px] text-emerald-400"></i>' : ''}
-                            </div>
-                            ${(myProfile.isAdmin || isMe) ? `
-                                <button class="delete-msg absolute -top-1.5 -right-1.5 bg-red-600/90 text-white w-5 h-5 rounded-full text-[8px] opacity-0 group-hover:opacity-100 transition-all flex items-center justify-center" data-id="${msgId}">
-                                    <i class="fa-solid fa-times"></i>
-                                </button>
-                            ` : ''}
+                        ${!isMe ? `<div class="text-[10px] font-black text-emerald-400 uppercase italic mb-1">${m.author}</div>` : ''}
+                        <div class="text-zinc-100">${m.txt}</div>
+                        <div class="flex justify-end items-center gap-1 mt-1 opacity-60">
+                            <span class="text-[8px] font-bold">${m.timestamp ? new Date(m.timestamp.toDate()).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : ''}</span>
+                            ${isMe ? '<i class="fa-solid fa-check-double text-[9px] text-sky-400"></i>' : ''}
                         </div>`;
-                    box.appendChild(div);
+                    container.appendChild(div);
                 });
-                
-                document.querySelectorAll('.delete-msg').forEach(btn => {
-                    btn.onclick = async () => {
-                        await deleteDoc(doc(db, path, btn.dataset.id));
-                    }
-                });
-
                 box.scrollTop = box.scrollHeight;
             });
 
-            document.getElementById('msg-form').onsubmit = (e) => {
-                e.preventDefault();
+            const sendMsg = () => {
                 const i = document.getElementById('m-input');
                 if (!i.value.trim()) return;
-                addDoc(collection(db, path), {
-                    txt: i.value,
-                    sid: myProfile.uid,
-                    author: myProfile.codename,
-                    timestamp: serverTimestamp()
-                });
+                addDoc(collection(db, path), { txt: i.value, sid: myProfile.uid, author: myProfile.codename, timestamp: serverTimestamp() });
                 i.value = '';
             };
+
+            document.getElementById('b-send').onclick = sendMsg;
+            document.getElementById('m-input').onkeypress = (e) => { if(e.key === 'Enter') sendMsg(); };
         }
 
         init();
