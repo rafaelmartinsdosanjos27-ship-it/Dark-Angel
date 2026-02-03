@@ -3,34 +3,88 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Dark Angel v13</title>
+    <title>Dark Angel - Elite</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap');
-        body { font-family: 'Inter', sans-serif; background-color: #050507; color: #e4e4e7; margin: 0; overflow: hidden; }
-        .glass { background: rgba(12, 12, 14, 0.98); border: 1px solid #27272a; }
-        .btn-press:active { transform: scale(0.96); opacity: 0.8; }
-        input { font-size: 16px !important; background: #0f0f12 !important; color: white !important; }
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;800&display=swap');
+        
+        :root {
+            --wa-bg: #0b141a;
+            --wa-panel: #111b21;
+            --wa-sent: #005c4b;
+            --wa-received: #202c33;
+            --accent: #6366f1;
+        }
+
+        body { 
+            font-family: 'Plus Jakarta Sans', sans-serif; 
+            background-color: var(--wa-bg); 
+            color: #e9edef; 
+            margin: 0; 
+            overflow: hidden; 
+        }
+
+        .chat-bg {
+            background-image: url('https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png');
+            background-repeat: repeat;
+            opacity: 0.06;
+            position: absolute;
+            inset: 0;
+            z-index: 0;
+            pointer-events: none;
+        }
+
+        .bubble-sent {
+            background-color: var(--wa-sent);
+            border-radius: 12px 0px 12px 12px;
+            position: relative;
+        }
+        .bubble-sent::after {
+            content: "";
+            position: absolute;
+            top: 0; right: -8px;
+            border-left: 10px solid var(--wa-sent);
+            border-bottom: 10px solid transparent;
+        }
+
+        .bubble-received {
+            background-color: var(--wa-received);
+            border-radius: 0px 12px 12px 12px;
+            position: relative;
+        }
+        .bubble-received::after {
+            content: "";
+            position: absolute;
+            top: 0; left: -8px;
+            border-right: 10px solid var(--wa-received);
+            border-bottom: 10px solid transparent;
+        }
+
+        .btn-press:active { transform: scale(0.96); }
+        input { font-size: 16px !important; }
         .hide-scroll::-webkit-scrollbar { display: none; }
-        .animate-enter { animation: enter 0.3s ease-out; }
-        @keyframes enter { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        
+        .animate-pop { animation: pop 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+        @keyframes pop { from { opacity: 0; transform: scale(0.9); } to { opacity: 1; transform: scale(1); } }
     </style>
 </head>
 <body>
 
-    <div id="app" class="h-screen w-full flex flex-col relative overflow-hidden bg-[#050507]">
-        <div id="loader" class="h-screen flex flex-col items-center justify-center">
-            <div class="text-indigo-500 font-black tracking-[0.3em] italic animate-pulse text-xl">DARK ANGEL</div>
+    <div id="app" class="h-screen w-full flex flex-col relative overflow-hidden">
+        <!-- Loader Inicial -->
+        <div class="h-screen flex flex-col items-center justify-center bg-[#0b141a]">
+            <div class="w-16 h-16 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
         </div>
     </div>
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-app.js";
-        import { getFirestore, doc, setDoc, getDoc, collection, addDoc, query, onSnapshot, serverTimestamp, orderBy, limit } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore.js";
+        import { getFirestore, doc, setDoc, getDoc, collection, addDoc, query, onSnapshot, serverTimestamp, orderBy, limit, deleteDoc } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore.js";
         import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-auth.js";
 
         const MASTER_PASSWORD = "dark_angel";
+        const ADMIN_NAME = "RAFAEL"; // Defina o seu nome aqui para ter moderação
         
         const firebaseConfig = {
             apiKey: "AIzaSyAAKqeX0Aq0n4OzgilX-5Q1PPVoSiPXCIc",
@@ -46,15 +100,14 @@
         const auth = getAuth(app);
         const appContainer = document.getElementById('app');
 
-        let myProfile = JSON.parse(localStorage.getItem('dark_angel_user_v13')) || null;
-        let selectedImageData = null;
+        let myProfile = JSON.parse(localStorage.getItem('dark_angel_v14_profile')) || null;
+        let selectedImg = null;
 
-        async function start() {
+        async function init() {
             try {
                 await signInAnonymously(auth);
-                if (sessionStorage.getItem('access_granted_v13') === 'true') {
-                    if (myProfile) renderMain();
-                    else renderSetup();
+                if (sessionStorage.getItem('v14_auth') === 'true') {
+                    myProfile ? renderHome() : renderSetup();
                 } else {
                     renderLogin();
                 }
@@ -65,38 +118,46 @@
 
         function renderLogin() {
             appContainer.innerHTML = `
-                <div class="h-screen flex flex-col items-center justify-center p-8 text-center space-y-8 animate-enter">
-                    <h1 class="text-4xl font-black italic text-white tracking-tighter uppercase">DARK ANGEL</h1>
+                <div class="h-screen flex flex-col items-center justify-center p-10 space-y-10 animate-pop">
+                    <div class="text-center">
+                        <div class="w-20 h-20 bg-indigo-600 rounded-[2rem] flex items-center justify-center mx-auto mb-6 shadow-2xl shadow-indigo-600/40">
+                            <i class="fa-solid fa-shield-halved text-white text-3xl"></i>
+                        </div>
+                        <h1 class="text-4xl font-extrabold tracking-tighter italic uppercase text-white">Dark Angel</h1>
+                        <p class="text-[10px] text-zinc-500 tracking-[0.4em] mt-2 uppercase">Protocolo de Elite</p>
+                    </div>
                     <div class="w-full max-w-xs space-y-4">
-                        <input type="password" id="pass-input" placeholder="PALAVRA-PASSE" class="w-full border border-zinc-800 p-5 rounded-2xl font-black text-center outline-none focus:border-indigo-500">
-                        <button id="btn-login" class="w-full bg-indigo-600 text-white py-5 rounded-2xl font-black uppercase tracking-widest btn-press">Entrar</button>
+                        <input type="password" id="p-in" placeholder="Chave de Acesso" class="w-full bg-[#111b21] border border-zinc-800 p-5 rounded-2xl font-bold text-center outline-none focus:border-indigo-500 transition-all text-white">
+                        <button id="b-login" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white py-5 rounded-2xl font-black uppercase tracking-widest btn-press shadow-xl">Autenticar</button>
                     </div>
                 </div>`;
-            document.getElementById('btn-login').onclick = () => {
-                if (document.getElementById('pass-input').value === MASTER_PASSWORD) {
-                    sessionStorage.setItem('access_granted_v13', 'true');
-                    myProfile ? renderMain() : renderSetup();
-                } else alert("Incorreto.");
+            document.getElementById('b-login').onclick = () => {
+                if (document.getElementById('p-in').value === MASTER_PASSWORD) {
+                    sessionStorage.setItem('v14_auth', 'true');
+                    myProfile ? renderHome() : renderSetup();
+                } else alert("Acesso Negado.");
             };
         }
 
         function renderSetup() {
             appContainer.innerHTML = `
-                <div class="h-screen flex flex-col items-center justify-center p-6 bg-[#050507] animate-enter">
-                    <div class="glass w-full max-w-sm p-8 rounded-[2.5rem] space-y-6 text-center border border-zinc-800">
-                        <h2 class="text-xl font-black italic text-indigo-500 uppercase">Perfil</h2>
-                        <div class="relative w-24 h-24 mx-auto cursor-pointer" id="avatar-click">
-                            <img id="preview" src="https://api.dicebear.com/7.x/bottts/svg?seed=Dark" class="w-full h-full rounded-3xl border-2 border-zinc-800 object-cover bg-zinc-900">
-                            <div class="absolute inset-0 flex items-center justify-center bg-black/40 rounded-3xl"><i class="fa-solid fa-camera"></i></div>
-                            <input type="file" id="file-in" accept="image/*" class="hidden">
+                <div class="h-screen flex flex-col items-center justify-center p-6 bg-[#0b141a] animate-pop">
+                    <div class="bg-[#111b21] w-full max-w-sm p-8 rounded-[3rem] border border-zinc-800 text-center space-y-6">
+                        <h2 class="text-xl font-extrabold uppercase italic text-indigo-500">Configurar ID</h2>
+                        <div class="relative w-24 h-24 mx-auto cursor-pointer" id="pick-img">
+                            <img id="prev" src="https://api.dicebear.com/7.x/avataaars/svg?seed=Dark" class="w-full h-full rounded-[1.8rem] object-cover border-2 border-indigo-500/30 bg-zinc-800">
+                            <div class="absolute -bottom-2 -right-2 bg-indigo-600 w-8 h-8 rounded-full flex items-center justify-center border-4 border-[#111b21]">
+                                <i class="fa-solid fa-camera text-[10px] text-white"></i>
+                            </div>
+                            <input type="file" id="f-in" accept="image/*" class="hidden">
                         </div>
-                        <input type="text" id="name-in" placeholder="CODINOME" class="w-full border border-zinc-800 p-4 rounded-xl font-black outline-none focus:border-indigo-500 uppercase text-white">
-                        <button id="btn-final" class="w-full bg-white text-black py-5 rounded-2xl font-black uppercase tracking-widest btn-press">Finalizar</button>
+                        <input type="text" id="n-in" placeholder="CODINOME" class="w-full bg-[#0b141a] border border-zinc-800 p-4 rounded-2xl font-extrabold outline-none focus:border-indigo-500 text-center uppercase text-white">
+                        <button id="b-save" class="w-full bg-white text-black py-5 rounded-2xl font-black uppercase tracking-widest btn-press">Concluir Registro</button>
                     </div>
                 </div>`;
 
-            document.getElementById('avatar-click').onclick = () => document.getElementById('file-in').click();
-            document.getElementById('file-in').onchange = (e) => {
+            document.getElementById('pick-img').onclick = () => document.getElementById('f-in').click();
+            document.getElementById('f-in').onchange = (e) => {
                 const file = e.target.files[0];
                 if (!file) return;
                 const reader = new FileReader();
@@ -104,72 +165,82 @@
                     const img = new Image();
                     img.onload = () => {
                         const canvas = document.createElement('canvas');
-                        canvas.width = 100; canvas.height = 100;
-                        canvas.getContext('2d').drawImage(img, 0, 0, 100, 100);
-                        selectedImageData = canvas.toDataURL('image/jpeg', 0.5);
-                        document.getElementById('preview').src = selectedImageData;
+                        canvas.width = 120; canvas.height = 120;
+                        canvas.getContext('2d').drawImage(img, 0, 0, 120, 120);
+                        selectedImg = canvas.toDataURL('image/jpeg', 0.6);
+                        document.getElementById('prev').src = selectedImg;
                     };
                     img.src = ev.target.result;
                 };
                 reader.readAsDataURL(file);
             };
 
-            document.getElementById('btn-final').onclick = async () => {
-                const name = document.getElementById('name-in').value.trim().toUpperCase();
-                if (name.length < 2) return alert("Nome muito curto.");
+            document.getElementById('b-save').onclick = async () => {
+                const name = document.getElementById('n-in').value.trim().toUpperCase();
+                if (name.length < 2) return alert("Codinome muito curto!");
                 
-                const btn = document.getElementById('btn-final');
-                btn.textContent = "A PROCESSAR...";
-                btn.disabled = true;
-
                 myProfile = {
                     uid: auth.currentUser.uid,
                     codename: name,
-                    photoURL: selectedImageData || `https://api.dicebear.com/7.x/bottts/svg?seed=${name}`
+                    photo: selectedImg || `https://api.dicebear.com/7.x/avataaars/svg?seed=${name}`,
+                    isAdmin: name === ADMIN_NAME
                 };
 
-                // Guardar localmente para rapidez
-                localStorage.setItem('dark_angel_user_v13', JSON.stringify(myProfile));
-                
-                // Tenta enviar para o Firebase, mas não trava se falhar
-                setDoc(doc(db, 'users', myProfile.uid), myProfile).catch(() => console.log("Erro de gravação ignorado."));
-                
-                setTimeout(() => renderMain(), 500);
+                localStorage.setItem('dark_angel_v14_profile', JSON.stringify(myProfile));
+                setDoc(doc(db, 'users', myProfile.uid), myProfile).catch(() => {});
+                renderHome();
             };
         }
 
-        function renderMain() {
+        function renderHome() {
             appContainer.innerHTML = `
-                <div class="flex flex-col h-full animate-enter">
-                    <header class="p-6 flex justify-between items-center border-b border-zinc-900">
-                        <div class="flex items-center gap-3">
-                            <img src="${myProfile.photoURL}" class="w-10 h-10 rounded-xl border border-zinc-800 object-cover">
-                            <span class="text-xs font-black uppercase text-indigo-500 italic">${myProfile.codename}</span>
+                <div class="flex flex-col h-full bg-[#0b141a] animate-pop">
+                    <header class="p-6 flex justify-between items-center bg-[#111b21] border-b border-white/5">
+                        <div class="flex items-center gap-4">
+                            <img src="${myProfile.photo}" class="w-12 h-12 rounded-2xl object-cover border border-white/10">
+                            <div>
+                                <h3 class="text-sm font-extrabold text-white leading-none uppercase">${myProfile.codename}</h3>
+                                <span class="text-[9px] text-emerald-500 font-bold uppercase tracking-tighter">● Online</span>
+                            </div>
                         </div>
-                        <button id="btn-out" class="text-zinc-600"><i class="fa-solid fa-power-off"></i></button>
+                        <button id="b-logout" class="w-10 h-10 rounded-xl bg-zinc-800/50 flex items-center justify-center text-zinc-400">
+                            <i class="fa-solid fa-arrow-right-from-bracket"></i>
+                        </button>
                     </header>
-                    <div class="flex-1 overflow-y-auto p-6 space-y-6 hide-scroll">
-                        <div id="btn-global" class="p-8 rounded-[2rem] bg-indigo-600 border border-indigo-400 btn-press cursor-pointer flex flex-col items-center shadow-lg shadow-indigo-600/20">
-                            <i class="fa-solid fa-tower-broadcast text-white text-3xl mb-3"></i>
-                            <h3 class="text-xl font-black italic uppercase text-white tracking-widest">Chat Global</h3>
+                    <div class="flex-1 overflow-y-auto p-4 space-y-4 hide-scroll relative">
+                        <div id="b-global" class="p-6 rounded-[2rem] bg-indigo-600 flex items-center gap-5 btn-press cursor-pointer shadow-xl shadow-indigo-900/20 border border-indigo-400/20">
+                            <div class="w-14 h-14 bg-white/20 rounded-2xl flex items-center justify-center text-2xl">
+                                <i class="fa-solid fa-tower-broadcast text-white"></i>
+                            </div>
+                            <div>
+                                <h4 class="font-black uppercase italic text-white">Chat Global</h4>
+                                <p class="text-[10px] text-indigo-100 font-bold opacity-70">Frequência da Elite</p>
+                            </div>
                         </div>
-                        <div id="users" class="space-y-3"></div>
+                        <div id="u-list" class="space-y-2 pt-4"></div>
                     </div>
                 </div>`;
 
-            document.getElementById('btn-global').onclick = () => renderChat('global');
-            document.getElementById('btn-out').onclick = () => { sessionStorage.clear(); location.reload(); };
+            document.getElementById('b-global').onclick = () => renderChat('global');
+            document.getElementById('b-logout').onclick = () => { sessionStorage.clear(); location.reload(); };
 
             onSnapshot(collection(db, 'users'), (snap) => {
-                const list = document.getElementById('users');
+                const list = document.getElementById('u-list');
                 if (!list) return;
-                list.innerHTML = '<h2 class="text-[9px] font-black text-zinc-700 uppercase tracking-widest mb-4 ml-2">Agentes Online</h2>';
+                list.innerHTML = '<p class="text-[10px] font-black text-zinc-600 uppercase tracking-widest mb-4 ml-2">Agentes Disponíveis</p>';
                 snap.forEach(d => {
                     const u = d.data();
                     if (u.uid === myProfile.uid) return;
                     const el = document.createElement('div');
-                    el.className = "flex items-center gap-4 p-4 rounded-2xl bg-zinc-900 border border-zinc-800 btn-press cursor-pointer";
-                    el.innerHTML = `<img src="${u.photoURL}" class="w-10 h-10 rounded-xl object-cover"><span class="font-bold text-sm text-zinc-400">@${u.codename}</span>`;
+                    el.className = "flex items-center gap-4 p-4 rounded-2xl bg-[#111b21] border border-white/5 btn-press cursor-pointer hover:border-indigo-500/30 transition-all";
+                    el.innerHTML = `
+                        <img src="${u.photo}" class="w-12 h-12 rounded-xl object-cover">
+                        <div class="flex-1">
+                            <div class="font-bold text-sm text-zinc-200">@${u.codename}</div>
+                            <div class="text-[10px] text-zinc-500 uppercase font-black tracking-tighter">Canal Privado</div>
+                        </div>
+                        <i class="fa-solid fa-chevron-right text-zinc-700 text-xs"></i>
+                    `;
                     el.onclick = () => renderChat('dm', u);
                     list.appendChild(el);
                 });
@@ -178,56 +249,85 @@
 
         function renderChat(type, target = null) {
             appContainer.innerHTML = `
-                <div class="flex flex-col h-full animate-enter">
-                    <header class="p-5 border-b border-zinc-900 flex items-center gap-4 bg-[#050507]">
-                        <button id="back" class="p-2 text-zinc-500"><i class="fa-solid fa-arrow-left"></i></button>
-                        <span class="font-black text-[10px] uppercase text-indigo-500 tracking-widest">${type === 'global' ? 'Frequência Global' : target.codename}</span>
+                <div class="flex flex-col h-full bg-[#0b141a] relative animate-pop">
+                    <div class="chat-bg"></div>
+                    <header class="p-4 bg-[#111b21] flex items-center gap-4 border-b border-white/5 z-10">
+                        <button id="b-back" class="p-2 text-zinc-400"><i class="fa-solid fa-chevron-left"></i></button>
+                        <img src="${type === 'global' ? 'https://api.dicebear.com/7.x/shapes/svg?seed=global' : target.photo}" class="w-10 h-10 rounded-xl object-cover">
+                        <div class="flex-1">
+                            <h4 class="text-sm font-black uppercase text-white">${type === 'global' ? 'Frequência Global' : target.codename}</h4>
+                            <span class="text-[9px] text-indigo-500 font-black uppercase tracking-widest">${type === 'global' ? 'Todos os Agentes' : 'Criptografia Ponta-a-Ponta'}</span>
+                        </div>
                     </header>
-                    <div id="box" class="flex-1 overflow-y-auto p-6 space-y-4 hide-scroll"></div>
-                    <form id="f" class="p-4 border-t border-zinc-900">
-                        <div class="bg-zinc-900 rounded-2xl flex items-center px-4 border border-zinc-800">
-                            <input type="text" id="i" placeholder="Sua mensagem..." class="flex-1 bg-transparent border-none outline-none py-4 text-sm text-white" autocomplete="off">
-                            <button type="submit" class="text-indigo-500 p-2"><i class="fa-solid fa-paper-plane"></i></button>
+                    
+                    <div id="chat-box" class="flex-1 overflow-y-auto p-4 space-y-3 hide-scroll z-10 flex flex-col"></div>
+                    
+                    <form id="msg-form" class="p-4 bg-[#111b21] border-t border-white/5 z-10">
+                        <div class="flex items-center gap-3 bg-[#202c33] px-4 py-1 rounded-full border border-white/5 focus-within:border-indigo-500/50">
+                            <input type="text" id="m-input" placeholder="Mensagem..." class="flex-1 bg-transparent border-none outline-none py-3 text-[15px] text-white" autocomplete="off">
+                            <button type="submit" class="w-10 h-10 flex items-center justify-center text-indigo-500">
+                                <i class="fa-solid fa-paper-plane"></i>
+                            </button>
                         </div>
                     </form>
                 </div>`;
 
-            document.getElementById('back').onclick = renderMain;
-            const path = type === 'global' ? 'v13_global' : `v13_dm_${[myProfile.uid, target.uid].sort().join('_')}`;
+            document.getElementById('b-back').onclick = renderHome;
+            const path = type === 'global' ? 'v14_global' : `v14_dm_${[myProfile.uid, target.uid].sort().join('_')}`;
             
-            onSnapshot(query(collection(db, path), orderBy('timestamp', 'asc'), limit(50)), (snap) => {
-                const b = document.getElementById('box');
-                if (!b) return;
-                b.innerHTML = '';
+            onSnapshot(query(collection(db, path), orderBy('timestamp', 'asc'), limit(100)), (snap) => {
+                const box = document.getElementById('chat-box');
+                if (!box) return;
+                box.innerHTML = '';
                 snap.forEach(d => {
                     const m = d.data();
                     const isMe = m.sid === myProfile.uid;
-                    b.innerHTML += `
-                        <div class="flex ${isMe ? 'justify-end' : 'justify-start'} animate-enter">
-                            <div class="max-w-[85%] px-4 py-2 rounded-2xl text-[13px] ${isMe ? 'bg-indigo-600 text-white rounded-tr-none' : 'bg-zinc-900 border border-zinc-800 text-zinc-300 rounded-tl-none'}">
-                                <div class="${isMe ? 'hidden' : 'text-[9px] font-bold text-indigo-500 mb-1'}">${m.author}</div>
-                                ${m.txt}
+                    const msgId = d.id;
+                    
+                    const div = document.createElement('div');
+                    div.className = `flex ${isMe ? 'justify-end' : 'justify-start'} w-full animate-pop`;
+                    div.innerHTML = `
+                        <div class="${isMe ? 'bubble-sent' : 'bubble-received'} max-w-[85%] px-3 py-2 shadow-md relative group">
+                            ${!isMe ? `<p class="text-[10px] font-black text-indigo-400 mb-1 uppercase">${m.author}</p>` : ''}
+                            <div class="text-[14px] leading-tight text-white pr-4">${m.txt}</div>
+                            <div class="flex justify-end items-center gap-1 mt-1">
+                                <span class="text-[9px] text-zinc-400/60 uppercase">${new Date(m.timestamp?.toDate()).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                                ${isMe ? '<i class="fa-solid fa-check-double text-[10px] text-sky-400"></i>' : ''}
                             </div>
+                            ${(myProfile.isAdmin || isMe) ? `
+                                <button class="delete-msg absolute -top-2 -right-2 bg-red-600 text-white w-5 h-5 rounded-full text-[8px] opacity-0 group-hover:opacity-100 transition-opacity" data-id="${msgId}">
+                                    <i class="fa-solid fa-xmark"></i>
+                                </button>
+                            ` : ''}
                         </div>`;
+                    box.appendChild(div);
                 });
-                b.scrollTop = b.scrollHeight;
+                
+                // Ativa a deleção
+                document.querySelectorAll('.delete-msg').forEach(btn => {
+                    btn.onclick = async () => {
+                        if(confirm("Apagar mensagem?")) await deleteDoc(doc(db, path, btn.dataset.id));
+                    }
+                });
+
+                box.scrollTop = box.scrollHeight;
             });
 
-            document.getElementById('f').onsubmit = (e) => {
+            document.getElementById('msg-form').onsubmit = (e) => {
                 e.preventDefault();
-                const i = document.getElementById('i');
+                const i = document.getElementById('m-input');
                 if (!i.value.trim()) return;
-                addDoc(collection(db, path), { 
-                    txt: i.value, 
-                    sid: myProfile.uid, 
-                    author: myProfile.codename, 
-                    timestamp: serverTimestamp() 
+                addDoc(collection(db, path), {
+                    txt: i.value,
+                    sid: myProfile.uid,
+                    author: myProfile.codename,
+                    timestamp: serverTimestamp()
                 });
                 i.value = '';
             };
         }
 
-        start();
+        init();
     </script>
 </body>
 </html>
