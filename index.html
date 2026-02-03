@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-pt">
+<html lang="pt-br">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
@@ -12,28 +12,25 @@
         .glass-card { background: rgba(12, 12, 14, 0.98); border: 1px solid #27272a; backdrop-filter: blur(10px); }
         .hide-scrollbar::-webkit-scrollbar { display: none; }
         input { font-size: 16px !important; }
-        .btn-primary { background-color: #4f46e5; transition: all 0.2s; }
-        .btn-primary:active { transform: scale(0.95); opacity: 0.8; }
+        .pulse-fast { animation: pulse 1s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .3; } }
     </style>
 </head>
 <body>
 
     <div id="app" class="h-screen w-full flex flex-col relative overflow-hidden">
-        <div id="initial-loader" class="h-screen bg-[#050507] flex flex-col items-center justify-center space-y-4">
-            <div class="text-indigo-500 font-black tracking-widest italic animate-pulse">DARK ANGEL...</div>
+        <!-- Loader Inicial com botão de emergência -->
+        <div id="boot-loader" class="h-screen bg-[#050507] flex flex-col items-center justify-center space-y-6">
+            <div class="text-indigo-500 font-black tracking-[0.3em] italic pulse-fast text-sm">DARK ANGEL</div>
+            <div id="loader-status" class="text-[9px] text-zinc-700 uppercase font-bold tracking-widest">Sincronizando Satélite...</div>
+            <button id="emergency-logout" class="hidden mt-10 text-[10px] text-red-900 font-bold border border-red-900/30 px-4 py-2 rounded-full uppercase">Forçar Logout</button>
         </div>
     </div>
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-app.js";
-        import { 
-            getAuth, onAuthStateChanged, signInWithPopup, GoogleAuthProvider, 
-            signOut, createUserWithEmailAndPassword, signInWithEmailAndPassword 
-        } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-auth.js";
-        import { 
-            getFirestore, doc, setDoc, getDoc, collection, addDoc, 
-            query, onSnapshot, serverTimestamp, orderBy 
-        } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore.js";
+        import { getAuth, onAuthStateChanged, signInWithPopup, GoogleAuthProvider, signOut } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-auth.js";
+        import { getFirestore, doc, setDoc, getDoc, collection, addDoc, query, onSnapshot, serverTimestamp, orderBy } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyAAKqeX0Aq0n4OzgilX-5Q1PPVoSiPXCIc",
@@ -54,90 +51,79 @@
         let userProfile = null;
         const appContainer = document.getElementById('app');
 
-        function showNotification(text) {
-            const div = document.createElement('div');
-            div.className = "fixed top-10 left-1/2 -translate-x-1/2 z-[200] bg-red-600 text-white px-6 py-3 rounded-full text-xs font-black uppercase shadow-2xl animate-bounce";
-            div.textContent = text;
-            document.body.appendChild(div);
-            setTimeout(() => div.remove(), 5000);
+        // Botão de emergência aparece após 5 segundos se travar
+        setTimeout(() => {
+            const btn = document.getElementById('emergency-logout');
+            if(btn) btn.classList.remove('hidden');
+        }, 5000);
+
+        document.getElementById('emergency-logout').onclick = () => signOut(auth).then(() => location.reload());
+
+        function setStatus(txt) {
+            const el = document.getElementById('loader-status');
+            if(el) el.textContent = txt;
         }
 
-        // --- RENDERIZADORES ---
+        // --- TELAS ---
 
         function renderAuth() {
             appContainer.innerHTML = `
-                <div class="h-screen flex flex-col items-center justify-center p-6 text-center">
-                    <div class="w-full max-w-md space-y-8 animate-in fade-in duration-700">
-                        <i class="fa-solid fa-shield-halved text-indigo-500 text-6xl"></i>
+                <div class="h-screen flex flex-col items-center justify-center p-8 text-center space-y-12">
+                    <div class="space-y-2">
+                        <i class="fa-solid fa-ghost text-indigo-600 text-5xl mb-4"></i>
                         <h1 class="text-4xl font-black italic tracking-tighter">DARK ANGEL</h1>
-                        <div class="space-y-4">
-                            <button id="login-google" class="w-full bg-white text-black py-4 rounded-2xl font-black uppercase text-sm flex items-center justify-center gap-3">
-                                <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/pwa/google.svg" class="w-5"> Google Login
-                            </button>
-                            <button id="show-email" class="w-full bg-zinc-900 border border-zinc-800 py-4 rounded-2xl font-black uppercase text-xs text-zinc-500">Acesso por E-mail</button>
-                        </div>
+                        <p class="text-zinc-600 text-[10px] font-bold uppercase tracking-[0.4em]">Protocolo de Acesso</p>
                     </div>
+                    <button id="btn-google" class="w-full max-w-xs bg-white text-black py-4 rounded-2xl font-black uppercase text-sm flex items-center justify-center gap-3 active:scale-95 transition-all">
+                        <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/pwa/google.svg" class="w-5"> Entrar com Google
+                    </button>
                 </div>
             `;
-            document.getElementById('login-google').onclick = () => signInWithPopup(auth, provider).catch(e => showNotification("Erro Google: Autorize o domínio no Firebase."));
-            document.getElementById('show-email').onclick = () => renderEmailForm();
-        }
-
-        function renderEmailForm() {
-            appContainer.innerHTML = `
-                <div class="h-screen flex flex-col p-8 space-y-6">
-                    <button id="back-auth" class="text-zinc-600 text-xs font-black uppercase"><i class="fa-solid fa-arrow-left mr-2"></i> Voltar</button>
-                    <h2 class="text-2xl font-black italic uppercase">Registro de Operador</h2>
-                    <form id="email-form" class="space-y-4">
-                        <input type="email" id="email" placeholder="E-MAIL" required class="w-full bg-zinc-900 border border-zinc-800 p-4 rounded-xl outline-none">
-                        <input type="password" id="pass" placeholder="SENHA (MÍN. 6 CARACTERES)" required class="w-full bg-zinc-900 border border-zinc-800 p-4 rounded-xl outline-none">
-                        <button type="submit" class="w-full btn-primary py-4 rounded-2xl font-black uppercase">Entrar / Registar</button>
-                    </form>
-                    <p class="text-[9px] text-zinc-700 text-center leading-relaxed">Nota: Se der erro ao registar, certifique-se que ativou "Email/Password" no painel Authentication do Firebase.</p>
-                </div>
-            `;
-            document.getElementById('back-auth').onclick = renderAuth;
-            document.getElementById('email-form').onsubmit = async (e) => {
-                e.preventDefault();
-                const em = document.getElementById('email').value;
-                const ps = document.getElementById('pass').value;
-                try {
-                    await signInWithEmailAndPassword(auth, em, ps);
-                } catch (err) {
-                    try {
-                        await createUserWithEmailAndPassword(auth, em, ps);
-                    } catch (err2) {
-                        showNotification("Erro: Ative Email/Password no Firebase.");
-                    }
-                }
+            document.getElementById('btn-google').onclick = () => {
+                signInWithPopup(auth, provider).catch(e => {
+                    alert("Erro: Certifique-se que o domínio " + window.location.hostname + " está autorizado no Firebase.");
+                });
             };
         }
 
         function renderSetup() {
             appContainer.innerHTML = `
-                <div class="h-screen flex flex-col items-center justify-center p-6">
-                    <div class="glass-card w-full max-w-sm p-8 rounded-[2.5rem] space-y-6 text-center">
-                        <h2 class="text-xl font-black italic uppercase text-indigo-500">Novo Recruta Detectado</h2>
-                        <div class="relative w-24 h-24 mx-auto">
-                            <img id="setup-img" src="${currentUser.photoURL || 'https://api.dicebear.com/7.x/avataaars/svg?seed=Shadow'}" class="w-24 h-24 rounded-3xl border-2 border-indigo-600 object-cover">
+                <div class="h-screen flex flex-col items-center justify-center p-8 animate-in fade-in duration-500">
+                    <div class="glass-card w-full max-w-sm p-8 rounded-[3rem] space-y-8 text-center">
+                        <div class="space-y-2">
+                            <h2 class="text-xl font-black italic uppercase text-indigo-500">Novo Operador</h2>
+                            <p class="text-[9px] text-zinc-600 font-bold uppercase">Configure sua identidade no terminal</p>
                         </div>
-                        <input type="text" id="setup-code" placeholder="ESCOLHA UM CODINOME" class="w-full bg-zinc-900 border border-zinc-800 p-4 rounded-xl font-black text-center outline-none">
-                        <button id="save-setup" class="w-full bg-white text-black py-4 rounded-2xl font-black uppercase">Ativar Credenciais</button>
+                        <div class="relative w-24 h-24 mx-auto">
+                            <img id="setup-img" src="${currentUser.photoURL || 'https://api.dicebear.com/7.x/avataaars/svg?seed=Dark'}" class="w-24 h-24 rounded-[2rem] border-2 border-indigo-600 object-cover bg-zinc-900">
+                        </div>
+                        <div class="space-y-4">
+                            <input type="text" id="setup-code" placeholder="DIGITE SEU CODINOME" class="w-full bg-zinc-900 border border-zinc-800 p-5 rounded-2xl font-black text-center outline-none focus:border-indigo-500 uppercase tracking-tighter">
+                            <button id="save-setup" class="w-full bg-indigo-600 text-white py-5 rounded-2xl font-black uppercase tracking-widest active:scale-95 transition-all shadow-lg shadow-indigo-600/20">Ativar Terminal</button>
+                        </div>
                     </div>
                 </div>
             `;
             document.getElementById('save-setup').onclick = async () => {
                 const code = document.getElementById('setup-code').value.trim().toLowerCase().replace(/\s/g, '');
-                if(!code) return showNotification("Codinome Inválido");
+                if(!code || code.length < 3) return alert("Codinome muito curto ou inválido.");
+                
+                setStatus("Registrando Identidade...");
                 const profile = {
                     uid: currentUser.uid,
                     codename: code,
-                    photoURL: currentUser.photoURL || 'https://api.dicebear.com/7.x/avataaars/svg?seed=Shadow',
+                    photoURL: currentUser.photoURL || 'https://api.dicebear.com/7.x/avataaars/svg?seed=Dark',
                     email: currentUser.email,
                     createdAt: serverTimestamp()
                 };
-                await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'users', currentUser.uid), profile);
-                location.reload();
+                
+                try {
+                    await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'users', currentUser.uid), profile);
+                    userProfile = profile;
+                    renderMain();
+                } catch(e) {
+                    alert("Erro ao salvar: Verifique as regras do Firestore.");
+                }
             };
         }
 
@@ -145,17 +131,22 @@
             appContainer.innerHTML = `
                 <div class="flex flex-col h-full bg-[#050507]">
                     <header class="p-6 flex justify-between items-center border-b border-zinc-900/50">
-                        <h1 class="text-xl font-black italic text-indigo-500 tracking-tighter">DARK ANGEL</h1>
+                        <div class="flex items-center gap-3">
+                            <div class="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                            <h1 class="text-lg font-black italic text-indigo-500 tracking-tighter">DARK ANGEL</h1>
+                        </div>
                         <img id="go-profile" src="${userProfile.photoURL}" class="w-10 h-10 rounded-xl border border-zinc-800 cursor-pointer object-cover">
                     </header>
-                    <div class="flex-1 overflow-y-auto p-6 space-y-4 hide-scrollbar">
-                        <div id="go-global" class="p-8 rounded-[2rem] bg-indigo-900/10 border border-indigo-500/20 active:scale-95 transition-all cursor-pointer">
-                            <i class="fa-solid fa-earth-americas text-indigo-400 mb-2"></i>
-                            <h3 class="text-lg font-black italic uppercase">Canal Global</h3>
-                            <p class="text-[9px] font-bold text-indigo-500/40 uppercase">Broadcast Ativo</p>
+                    <div class="flex-1 overflow-y-auto p-6 space-y-6 hide-scrollbar">
+                        <div id="go-global" class="group relative overflow-hidden p-8 rounded-[2.5rem] bg-indigo-600/10 border border-indigo-500/20 active:scale-95 transition-all cursor-pointer">
+                            <div class="relative z-10">
+                                <i class="fa-solid fa-tower-broadcast text-indigo-400 mb-3 text-2xl"></i>
+                                <h3 class="text-xl font-black italic uppercase">Frequência Global</h3>
+                                <p class="text-[9px] font-bold text-indigo-500/40 uppercase tracking-[0.2em]">Canais Abertos</p>
+                            </div>
                         </div>
-                        <div id="users-container" class="space-y-2 pt-4">
-                            <h2 class="text-[9px] font-black text-zinc-700 uppercase tracking-widest mb-4">Operadores Online</h2>
+                        <div id="users-container" class="space-y-3">
+                            <h2 class="text-[9px] font-black text-zinc-700 uppercase tracking-widest mb-4 ml-2">Agentes Online</h2>
                         </div>
                     </div>
                 </div>
@@ -163,16 +154,23 @@
             document.getElementById('go-profile').onclick = renderProfile;
             document.getElementById('go-global').onclick = () => renderChat('global');
             
+            // Listagem de Usuários
             onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'users'), (snap) => {
                 const container = document.getElementById('users-container');
                 if(!container) return;
-                container.innerHTML = '<h2 class="text-[9px] font-black text-zinc-700 uppercase tracking-widest mb-4">Operadores Online</h2>';
+                container.innerHTML = '<h2 class="text-[9px] font-black text-zinc-700 uppercase tracking-widest mb-4 ml-2">Agentes Online</h2>';
                 snap.forEach(d => {
                     const u = d.data();
                     if(u.uid === currentUser.uid) return;
                     const item = document.createElement('div');
-                    item.className = "flex items-center gap-4 p-4 rounded-2xl bg-zinc-900/30 border border-zinc-800 active:bg-zinc-800 transition-all cursor-pointer";
-                    item.innerHTML = `<img src="${u.photoURL}" class="w-10 h-10 rounded-lg grayscale opacity-50 object-cover"><span class="font-bold text-sm">@${u.codename}</span>`;
+                    item.className = "flex items-center gap-4 p-4 rounded-2xl bg-zinc-900/40 border border-zinc-800 active:bg-zinc-800 transition-all cursor-pointer";
+                    item.innerHTML = `
+                        <div class="relative">
+                            <img src="${u.photoURL}" class="w-12 h-12 rounded-2xl grayscale object-cover">
+                            <div class="absolute -bottom-1 -right-1 w-3 h-3 bg-green-500 border-2 border-[#050507] rounded-full"></div>
+                        </div>
+                        <span class="flex-1 font-black text-sm uppercase tracking-tighter text-zinc-400">@${u.codename}</span>
+                    `;
                     item.onclick = () => renderChat('dm', u);
                     container.appendChild(item);
                 });
@@ -182,15 +180,20 @@
         function renderChat(type, target = null) {
             appContainer.innerHTML = `
                 <div class="flex flex-col h-full bg-[#050507]">
-                    <header class="p-4 border-b border-zinc-900 flex items-center gap-4">
-                        <button id="back-main" class="p-2 text-zinc-600"><i class="fa-solid fa-arrow-left"></i></button>
-                        <span class="font-black text-xs uppercase italic tracking-widest text-indigo-400">${type === 'global' ? 'Global' : target.codename}</span>
+                    <header class="p-5 border-b border-zinc-900 flex items-center gap-4">
+                        <button id="back-main" class="p-2 text-zinc-600"><i class="fa-solid fa-chevron-left"></i></button>
+                        <div class="flex flex-col">
+                            <span class="font-black text-[10px] uppercase italic tracking-widest text-indigo-500">
+                                ${type === 'global' ? 'Broadcast Global' : 'Privado: ' + target.codename}
+                            </span>
+                            <span class="text-[7px] text-zinc-700 font-bold uppercase">Conexão P2P Ativa</span>
+                        </div>
                     </header>
-                    <div id="msgs" class="flex-1 overflow-y-auto p-4 space-y-4 hide-scrollbar"></div>
-                    <form id="send-form" class="p-4">
-                        <div class="bg-zinc-900 border border-zinc-800 rounded-2xl flex items-center px-4 py-1">
-                            <input type="text" id="m-input" placeholder="Transmitir..." class="flex-1 bg-transparent border-none outline-none py-4 text-sm">
-                            <button type="submit" class="text-indigo-500 p-2"><i class="fa-solid fa-paper-plane"></i></button>
+                    <div id="msgs" class="flex-1 overflow-y-auto p-6 space-y-6 hide-scrollbar bg-[radial-gradient(circle_at_top,rgba(79,70,229,0.03),transparent)]"></div>
+                    <form id="send-form" class="p-6 bg-[#050507]">
+                        <div class="bg-zinc-900/50 border border-zinc-800/50 rounded-2xl flex items-center px-4 py-1">
+                            <input type="text" id="m-input" placeholder="Digite sua mensagem..." class="flex-1 bg-transparent border-none outline-none py-4 text-sm font-medium">
+                            <button type="submit" class="text-indigo-500 p-2 active:scale-90 transition-all"><i class="fa-solid fa-paper-plane text-xl"></i></button>
                         </div>
                     </form>
                 </div>
@@ -206,9 +209,12 @@
                     const m = d.data();
                     const isMe = m.sid === currentUser.uid;
                     div.innerHTML += `
-                        <div class="flex ${isMe ? 'justify-end' : 'justify-start'}">
-                            <div class="max-w-[80%] px-4 py-2 rounded-2xl text-sm ${isMe ? 'bg-indigo-600 rounded-tr-none' : 'bg-zinc-900 border border-zinc-800 rounded-tl-none text-zinc-400'}">
-                                ${m.txt}
+                        <div class="flex ${isMe ? 'justify-end' : 'justify-start'} animate-in slide-in-from-bottom-2 duration-300">
+                            <div class="max-w-[85%]">
+                                ${!isMe && type === 'global' ? `<span class="text-[8px] font-black text-zinc-700 uppercase ml-2 mb-1 block">@${m.sname || 'Agente'}</span>` : ''}
+                                <div class="px-5 py-3 rounded-[1.5rem] text-[13px] leading-relaxed ${isMe ? 'bg-indigo-600 text-white rounded-tr-none shadow-lg shadow-indigo-600/10' : 'bg-zinc-900 border border-zinc-800 text-zinc-300 rounded-tl-none'}">
+                                    ${m.txt}
+                                </div>
                             </div>
                         </div>
                     `;
@@ -222,32 +228,55 @@
                 const val = input.value.trim();
                 if(!val) return;
                 input.value = '';
-                await addDoc(collection(db, path), { txt: val, sid: currentUser.uid, timestamp: serverTimestamp() });
+                await addDoc(collection(db, path), { 
+                    txt: val, 
+                    sid: currentUser.uid, 
+                    sname: userProfile.codename,
+                    timestamp: serverTimestamp() 
+                });
             };
         }
 
         function renderProfile() {
             appContainer.innerHTML = `
-                <div class="h-full flex flex-col items-center justify-center p-8 space-y-8 animate-in fade-in">
-                    <img src="${userProfile.photoURL}" class="w-32 h-32 rounded-[2.5rem] border-4 border-indigo-600 shadow-2xl object-cover">
-                    <h2 class="text-2xl font-black italic">@${userProfile.codename}</h2>
-                    <button id="logout" class="w-full max-w-xs p-5 bg-red-500/10 text-red-500 font-black uppercase rounded-2xl border border-red-500/20">Desligar Terminal</button>
-                    <button id="prof-back" class="text-zinc-600 font-black uppercase text-xs">Voltar</button>
+                <div class="h-full flex flex-col items-center justify-center p-10 space-y-10 animate-in fade-in">
+                    <div class="relative">
+                        <img src="${userProfile.photoURL}" class="w-40 h-40 rounded-[3rem] border-4 border-indigo-600 shadow-2xl object-cover">
+                        <div class="absolute -bottom-2 -right-2 bg-indigo-600 p-3 rounded-2xl shadow-xl">
+                            <i class="fa-solid fa-check-double text-white text-sm"></i>
+                        </div>
+                    </div>
+                    <div class="text-center space-y-1">
+                        <h2 class="text-3xl font-black italic uppercase tracking-tighter">@${userProfile.codename}</h2>
+                        <p class="text-zinc-600 text-[10px] font-bold uppercase tracking-widest">${userProfile.email}</p>
+                    </div>
+                    <div class="w-full space-y-3">
+                        <button id="logout" class="w-full p-5 bg-red-500/10 text-red-500 font-black uppercase tracking-widest rounded-2xl border border-red-500/20 active:scale-95 transition-all">Encerrar Sessão</button>
+                        <button id="prof-back" class="w-full p-5 text-zinc-600 font-black uppercase tracking-widest text-[10px]">Voltar ao Terminal</button>
+                    </div>
                 </div>
             `;
             document.getElementById('prof-back').onclick = renderMain;
             document.getElementById('logout').onclick = () => signOut(auth).then(() => location.reload());
         }
 
-        // --- AUTH OBSERVER ---
+        // --- AUTH OBSERVER (Lógica de Força Bruta) ---
         onAuthStateChanged(auth, async (user) => {
             if (user) {
                 currentUser = user;
-                const snap = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'users', user.uid));
-                if (snap.exists()) {
+                setStatus("Buscando Perfil...");
+                
+                // Tenta buscar o perfil por até 3 segundos
+                const timeoutPromise = new Promise(resolve => setTimeout(() => resolve(null), 3500));
+                const fetchPromise = getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'users', user.uid));
+                
+                const snap = await Promise.race([fetchPromise, timeoutPromise]);
+                
+                if (snap && snap.exists()) {
                     userProfile = snap.data();
                     renderMain();
                 } else {
+                    // Se não existir ou demorar demais, força o Setup
                     renderSetup();
                 }
             } else {
