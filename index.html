@@ -27,7 +27,6 @@
             overflow: hidden;
         }
 
-        /* Container que se adapta: 100% no mobile, fixo no PC */
         .app-container {
             width: 100%;
             height: 100%;
@@ -56,7 +55,6 @@
             pointer-events: none;
         }
 
-        /* Área de mensagens com scroll corrigido */
         #chat-content {
             flex: 1;
             overflow-y: auto;
@@ -93,7 +91,6 @@
             color: #e9edef;
         }
 
-        /* Barra de baixo fixa */
         .input-area {
             background-color: var(--wa-panel);
             padding: 8px 12px;
@@ -133,7 +130,6 @@
 <body>
 
     <div id="app" class="app-container">
-        <!-- Loader inicial -->
         <div class="flex-1 flex items-center justify-center">
             <div class="w-8 h-8 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin"></div>
         </div>
@@ -145,6 +141,10 @@
         import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-auth.js";
 
         const MASTER_KEY = "dark_angel";
+        
+        // Nome fixo da coleção para as mensagens não sumirem nunca mais
+        const DB_COLLECTION_PREFIX = "dark_angel_v1_permanent";
+
         const firebaseConfig = {
             apiKey: "AIzaSyAAKqeX0Aq0n4OzgilX-5Q1PPVoSiPXCIc",
             authDomain: "chat-geral-a3bba.firebaseapp.com",
@@ -159,11 +159,11 @@
         const auth = getAuth(app);
         const root = document.getElementById('app');
 
-        let myData = JSON.parse(localStorage.getItem('da_v18_user'));
+        let myData = JSON.parse(localStorage.getItem('da_user_data'));
 
         async function start() {
             await signInAnonymously(auth);
-            if (sessionStorage.getItem('da_v18_auth')) {
+            if (sessionStorage.getItem('da_logged')) {
                 myData ? showDashboard() : showOnboarding();
             } else {
                 showLock();
@@ -173,21 +173,21 @@
         function showLock() {
             root.innerHTML = `
                 <div class="flex-1 flex flex-col items-center justify-center p-10 text-center space-y-8">
-                    <div class="w-20 h-20 bg-emerald-600 rounded-3xl flex items-center justify-center shadow-2xl rotate-3">
-                        <i class="fa-solid fa-shield-halved text-white text-3xl"></i>
+                    <div class="w-20 h-20 bg-emerald-600 rounded-3xl flex items-center justify-center shadow-2xl">
+                        <i class="fa-solid fa-bolt-lightning text-white text-3xl"></i>
                     </div>
                     <div>
                         <h1 class="text-white text-xl font-black italic uppercase tracking-widest">Dark Angel</h1>
                         <p class="text-zinc-500 text-[10px] uppercase font-bold mt-1">Terminal de Acesso</p>
                     </div>
                     <div class="w-full space-y-3">
-                        <input type="password" id="key-in" placeholder="DIGITE A CHAVE" class="w-full bg-[#111b21] border border-white/5 p-4 rounded-xl text-center text-white outline-none focus:border-emerald-500 transition-all">
-                        <button id="key-btn" class="w-full bg-emerald-600 text-white py-4 rounded-xl font-black uppercase tracking-widest active:scale-95 transition-transform">Desbloquear</button>
+                        <input type="password" id="key-in" placeholder="CHAVE" class="w-full bg-[#111b21] border border-white/5 p-4 rounded-xl text-center text-white outline-none focus:border-emerald-500">
+                        <button id="key-btn" class="w-full bg-emerald-600 text-white py-4 rounded-xl font-black uppercase tracking-widest active:scale-95 transition-transform">Entrar</button>
                     </div>
                 </div>`;
             document.getElementById('key-btn').onclick = () => {
                 if (document.getElementById('key-in').value === MASTER_KEY) {
-                    sessionStorage.setItem('da_v18_auth', 'true');
+                    sessionStorage.setItem('da_logged', 'true');
                     myData ? showDashboard() : showOnboarding();
                 }
             };
@@ -197,20 +197,20 @@
             root.innerHTML = `
                 <div class="flex-1 flex flex-col items-center justify-center p-6 space-y-6">
                     <div class="bg-[#111b21] w-full p-8 rounded-3xl border border-white/5 shadow-2xl">
-                        <h2 class="text-emerald-500 font-black text-center mb-6 uppercase italic">Nova Identidade</h2>
+                        <h2 class="text-emerald-500 font-black text-center mb-6 uppercase italic text-sm">Registar Agente</h2>
                         <div class="w-24 h-24 mx-auto mb-6 bg-zinc-800 rounded-2xl overflow-hidden border-2 border-emerald-500/30">
                             <img id="avatar-pre" src="https://api.dicebear.com/7.x/bottts/svg?seed=Dark" class="w-full h-full object-cover">
                         </div>
-                        <input type="text" id="name-in" placeholder="TEU CODINOME" class="w-full bg-[#0b141a] border border-white/5 p-4 rounded-xl text-center text-white font-bold uppercase outline-none focus:border-emerald-500 mb-4">
-                        <button id="reg-btn" class="w-full bg-emerald-600 text-white py-4 rounded-xl font-black uppercase">Registrar</button>
+                        <input type="text" id="name-in" placeholder="NOME DO AGENTE" class="w-full bg-[#0b141a] border border-white/5 p-4 rounded-xl text-center text-white font-bold uppercase outline-none focus:border-emerald-500 mb-4">
+                        <button id="reg-btn" class="w-full bg-emerald-600 text-white py-4 rounded-xl font-black uppercase">Criar Perfil</button>
                     </div>
                 </div>`;
             document.getElementById('reg-btn').onclick = () => {
                 const name = document.getElementById('name-in').value.trim().toUpperCase();
                 if(name.length < 2) return;
                 myData = { uid: auth.currentUser.uid, name, photo: `https://api.dicebear.com/7.x/bottts/svg?seed=${name}` };
-                localStorage.setItem('da_v18_user', JSON.stringify(myData));
-                setDoc(doc(db, 'users', myData.uid), myData);
+                localStorage.setItem('da_user_data', JSON.stringify(myData));
+                setDoc(doc(db, 'da_permanent_users', myData.uid), myData);
                 showDashboard();
             };
         }
@@ -220,17 +220,17 @@
                 <div class="flex flex-col h-full">
                     <header class="p-4 bg-[#111b21] flex justify-between items-center shadow-md z-30">
                         <div class="flex items-center gap-3">
-                            <img src="${myData.photo}" class="w-10 h-10 rounded-full border border-emerald-500/50">
+                            <img src="${myData.photo}" class="w-10 h-10 rounded-full">
                             <span class="text-white font-bold text-sm italic uppercase">${myData.name}</span>
                         </div>
                         <i class="fa-solid fa-ghost text-emerald-500"></i>
                     </header>
                     <div class="flex-1 overflow-y-auto p-4 space-y-4">
                         <div id="btn-g" class="p-5 bg-emerald-600/10 border border-emerald-500/20 rounded-2xl flex items-center gap-4 cursor-pointer active:bg-emerald-600/20">
-                            <div class="w-12 h-12 bg-emerald-600 rounded-full flex items-center justify-center text-white shadow-lg"><i class="fa-solid fa-satellite-dish"></i></div>
+                            <div class="w-12 h-12 bg-emerald-600 rounded-full flex items-center justify-center text-white shadow-lg"><i class="fa-solid fa-globe"></i></div>
                             <div>
-                                <h3 class="text-emerald-400 font-black italic uppercase">Frequência Global</h3>
-                                <p class="text-[9px] text-zinc-500 font-bold uppercase">Canal Aberto</p>
+                                <h3 class="text-emerald-400 font-black italic uppercase">Chat Global</h3>
+                                <p class="text-[9px] text-zinc-500 font-bold uppercase tracking-widest">Histórico Permanente</p>
                             </div>
                         </div>
                         <div id="user-list" class="space-y-1"></div>
@@ -238,16 +238,16 @@
                 </div>`;
 
             document.getElementById('btn-g').onclick = () => openChat('global');
-            onSnapshot(collection(db, 'users'), (snap) => {
+            onSnapshot(collection(db, 'da_permanent_users'), (snap) => {
                 const list = document.getElementById('user-list');
                 if(!list) return;
-                list.innerHTML = '<p class="text-[10px] font-black text-zinc-600 uppercase tracking-widest my-4">Agentes Disponíveis</p>';
+                list.innerHTML = '<p class="text-[10px] font-black text-zinc-600 uppercase tracking-widest my-4">Agentes Ativos</p>';
                 snap.forEach(d => {
                     const u = d.data();
                     if(u.uid === myData.uid) return;
                     const div = document.createElement('div');
                     div.className = "flex items-center gap-4 p-3 hover:bg-[#111b21] rounded-xl cursor-pointer active:bg-[#111b21]";
-                    div.innerHTML = `<img src="${u.photo}" class="w-12 h-12 rounded-full"><div class="flex-1 border-b border-white/5 pb-2"><div class="text-white font-bold uppercase italic text-sm">${u.name}</div><div class="text-[10px] text-emerald-500 uppercase font-black">Online</div></div>`;
+                    div.innerHTML = `<img src="${u.photo}" class="w-12 h-12 rounded-full"><div class="flex-1 border-b border-white/5 pb-2"><div class="text-white font-bold uppercase italic text-sm">${u.name}</div><div class="text-[10px] text-emerald-500 uppercase font-black">Disponível</div></div>`;
                     div.onclick = () => openChat('dm', u);
                     list.appendChild(div);
                 });
@@ -259,11 +259,11 @@
                 <div class="flex flex-col h-full relative">
                     <div class="chat-wallpaper"></div>
                     <header class="p-3 bg-[#111b21] flex items-center gap-3 shadow-lg z-20">
-                        <button id="chat-back" class="p-2 text-zinc-400"><i class="fa-solid fa-chevron-left"></i></button>
-                        <img src="${type === 'global' ? 'https://api.dicebear.com/7.x/shapes/svg?seed=G' : target.photo}" class="w-10 h-10 rounded-full border border-emerald-500/30">
+                        <button id="chat-back" class="p-2 text-zinc-400"><i class="fa-solid fa-arrow-left"></i></button>
+                        <img src="${type === 'global' ? 'https://api.dicebear.com/7.x/shapes/svg?seed=G' : target.photo}" class="w-10 h-10 rounded-full">
                         <div class="flex-1">
-                            <h2 class="text-white font-black text-sm uppercase italic truncate">${type === 'global' ? 'Broadcast Global' : target.name}</h2>
-                            <span class="text-[9px] text-emerald-500 font-bold uppercase">Conexão Segura</span>
+                            <h2 class="text-white font-black text-sm uppercase italic truncate">${type === 'global' ? 'Chat Global' : target.name}</h2>
+                            <span class="text-[9px] text-emerald-500 font-bold uppercase">Base de Dados V1</span>
                         </div>
                     </header>
                     
@@ -281,9 +281,11 @@
                 </div>`;
 
             document.getElementById('chat-back').onclick = showDashboard;
-            const channel = type === 'global' ? 'v18_global' : `v18_dm_${[myData.uid, target.uid].sort().join('_')}`;
             
-            onSnapshot(query(collection(db, channel), orderBy('timestamp', 'asc'), limit(100)), (snap) => {
+            // O caminho agora é fixo para nunca perder as mensagens
+            const channel = type === 'global' ? `${DB_COLLECTION_PREFIX}_global` : `${DB_COLLECTION_PREFIX}_dm_${[myData.uid, target.uid].sort().join('_')}`;
+            
+            onSnapshot(query(collection(db, channel), orderBy('timestamp', 'asc'), limit(150)), (snap) => {
                 const box = document.getElementById('chat-content');
                 if(!box) return;
                 box.innerHTML = '';
