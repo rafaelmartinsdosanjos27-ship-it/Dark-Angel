@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="pt-pt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dark Angel - Terminal</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap');
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #050507;
+            color: #e4e4e7;
+            margin: 0;
+            overflow: hidden;
+        }
+
+        .dark-gradient {
+            background: radial-gradient(circle at 50% 50%, rgba(79, 70, 229, 0.1), transparent);
+        }
+
+        .glass-card {
+            background: rgba(12, 12, 14, 0.9);
+            border: 1px solid rgba(39, 39, 42, 1);
+            backdrop-filter: blur(10px);
+        }
+
+        .hide-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+
+        .animate-pulse-slow {
+            animation: pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: .5; }
+        }
+
+        input:focus {
+            box-shadow: 0 0 15px rgba(79, 70, 229, 0.2);
+        }
+    </style>
+</head>
+<body>
+
+    <div id="app" class="h-screen w-full flex flex-col relative overflow-hidden">
+        <!-- O conteúdo será injectado via JavaScript -->
+    </div>
+
+    <!-- Firebase SDKs -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-app.js";
+        import { getAuth, onAuthStateChanged, signInWithPopup, GoogleAuthProvider, signOut, createUserWithEmailAndPassword, signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-auth.js";
+        import { getFirestore, doc, setDoc, getDoc, collection, addDoc, query, onSnapshot, serverTimestamp, orderBy } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore.js";
+
+        // Configuração do Firebase
+        const firebaseConfig = {
+            apiKey: "AIzaSyAAKqeX0Aq0n4OzgilX-5Q1PPVoSiPXCIc",
+            authDomain: "chat-geral-a3bba.firebaseapp.com",
+            projectId: "chat-geral-a3bba",
+            storageBucket: "chat-geral-a3bba.firebasestorage.app",
+            messagingSenderId: "1007033326627",
+            appId: "1:1007033326627:web:26f07d61a8f9ba1f642596"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        const provider = new GoogleAuthProvider();
+        const appId = "chat-geral-a3bba";
+
+        // Estado da Aplicação
+        let currentUser = null;
+        let userProfile = null;
+        let activeChat = { type: 'global' };
+        let unsubMessages = null;
+
+        const DEFAULT_AVATARS = [
+            "https://api.dicebear.com/7.x/avataaars/svg?seed=Shadow",
+            "https://api.dicebear.com/7.x/avataaars/svg?seed=Raven",
+            "https://api.dicebear.com/7.x/avataaars/svg?seed=Ghost"
+        ];
+
+        const appContainer = document.getElementById('app');
+
+        // --- NAVEGAÇÃO E RENDERS ---
+
+        function renderLoading() {
+            appContainer.innerHTML = `
+                <div class="h-screen bg-[#050507] flex items-center justify-center">
+                    <div class="text-indigo-500 font-black tracking-widest italic animate-pulse">DARK ANGEL...</div>
+                </div>
+            `;
+        }
+
+        function renderAuthSelection() {
+            appContainer.innerHTML = `
+                <div class="h-screen flex flex-col items-center justify-center p-6 dark-gradient">
+                    <div class="w-full max-w-md text-center space-y-8">
+                        <div>
+                            <i class="fa-solid fa-bolt text-indigo-500 text-5xl mb-4"></i>
+                            <h1 class="text-4xl font-black italic tracking-tighter">DARK ANGEL</h1>
+                            <p class="text-zinc-500 text-[10px] uppercase tracking-[0.4em]">Acesso ao Terminal</p>
+                        </div>
+                        <div class="space-y-4">
+                            <button id="btn-google" class="w-full flex items-center justify-center gap-3 bg-white text-black py-4 rounded-2xl font-black text-sm uppercase transition-all active:scale-95">
+                                <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/pwa/google.svg" class="w-5" alt="G">
+                                Google Login
+                            </button>
+                            <div class="flex items-center gap-4 py-2">
+                                <div class="h-px bg-zinc-800 flex-1"></div>
+                                <span class="text-zinc-600 text-[9px] font-black uppercase">Ou E-mail</span>
+                                <div class="h-px bg-zinc-800 flex-1"></div>
+                            </div>
+                            <button id="btn-show-login" class="w-full bg-zinc-900 border border-zinc-800 py-4 rounded-2xl font-black text-sm uppercase">Login Tradicional</button>
+                            <button id="btn-show-register" class="text-indigo-500 text-[10px] font-black uppercase tracking-widest mt-4">Criar Novo Registro</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            document.getElementById('btn-google').onclick = loginWithGoogle;
+            document.getElementById('btn-show-login').onclick = () => renderEmailForm('login');
+            document.getElementById('btn-show-register').onclick = () => renderEmailForm('register');
+        }
+
+        function renderEmailForm(mode) {
+            appContainer.innerHTML = `
+                <div class="h-screen flex flex-col items-center justify-center p-6">
+                    <div class="w-full max-w-md space-y-6">
+                        <button id="btn-back" class="text-zinc-500 text-[10px] font-black uppercase flex items-center gap-2"><i class="fa-solid fa-arrow-left"></i> Voltar</button>
+                        <h2 class="text-2xl font-black italic uppercase">${mode === 'login' ? 'Login' : 'Registro'}</h2>
+                        <form id="auth-form" class="space-y-4">
+                            ${mode === 'register' ? `
+                                <input type="text" id="reg-nome" placeholder="Nome Real" required class="w-full bg-zinc-900 border border-zinc-800 p-4 rounded-xl outline-none">
+                                <input type="tel" id="reg-tel" placeholder="Telefone" required class="w-full bg-zinc-900 border border-zinc-800 p-4 rounded-xl outline-none">
+                            ` : ''}
+                            <input type="email" id="auth-email" placeholder="E-mail" required class="w-full bg-zinc-900 border border-zinc-800 p-4 rounded-xl outline-none">
+                            <input type="password" id="auth-pass" placeholder="Senha" required class="w-full bg-zinc-900 border border-zinc-800 p-4 rounded-xl outline-none">
+                            <button type="submit" class="w-full bg-indigo-600 py-4 rounded-2xl font-black uppercase tracking-widest">${mode === 'login' ? 'Entrar' : 'Registrar'}</button>
+                        </form>
+                    </div>
+                </div>
+            `;
+            document.getElementById('btn-back').onclick = renderAuthSelection;
+            document.getElementById('auth-form').onsubmit = (e) => {
+                e.preventDefault();
+                const email = document.getElementById('auth-email').value;
+                const pass = document.getElementById('auth-pass').value;
+                if(mode === 'login') loginEmail(email, pass);
+                else registerEmail(email, pass, document.getElementById('reg-nome').value, document.getElementById('reg-tel').value);
+            };
+        }
+
+        function renderSetup() {
+            let selectedAvatar = currentUser.photoURL || DEFAULT_AVATARS[0];
+            appContainer.innerHTML = `
+                <div class="h-screen flex flex-col items-center justify-center p-6">
+                    <div class="glass-card w-full max-w-sm p-8 rounded-[2.5rem] text-center space-y-6">
+                        <h2 class="text-2xl font-black italic uppercase text-indigo-500">Perfil Dark Angel</h2>
+                        <div class="relative mx-auto w-24 h-24">
+                            <img id="setup-preview" src="${selectedAvatar}" class="w-24 h-24 rounded-3xl border-2 border-indigo-500 object-cover">
+                        </div>
+                        <div class="flex justify-center gap-3">
+                            ${DEFAULT_AVATARS.map(url => `<img src="${url}" class="avatar-opt w-10 h-10 rounded-lg cursor-pointer opacity-50 border-2 border-transparent" data-url="${url}">`).join('')}
+                        </div>
+                        <div class="text-left space-y-4">
+                            <div>
+                                <label class="text-[9px] font-black text-zinc-600 uppercase tracking-widest ml-1">Codinome (Sem espaços)</label>
+                                <input type="text" id="setup-codename" placeholder="Ex: AnjoCaido" class="w-full bg-zinc-900 border border-zinc-800 p-4 rounded-xl font-bold outline-none">
+                            </div>
+                        </div>
+                        <button id="btn-finish" class="w-full bg-white text-black py-4 rounded-2xl font-black uppercase tracking-widest">Ativar Identidade</button>
+                    </div>
+                </div>
+            `;
+
+            document.querySelectorAll('.avatar-opt').forEach(img => {
+                img.onclick = () => {
+                    selectedAvatar = img.dataset.url;
+                    document.getElementById('setup-preview').src = selectedAvatar;
+                    document.querySelectorAll('.avatar-opt').forEach(i => i.classList.add('opacity-50'));
+                    img.classList.remove('opacity-50');
+                    img.classList.add('border-indigo-500');
+                };
+            });
+
+            document.getElementById('setup-codename').oninput = (e) => {
+                e.target.value = e.target.value.replace(/\s/g, '');
+            };
+
+            document.getElementById('btn-finish').onclick = () => finishSetup(document.getElementById('setup-codename').value, selectedAvatar);
+        }
+
+        function renderMain() {
+            appContainer.innerHTML = `
+                <div class="flex flex-col h-full">
+                    <header class="p-6 flex justify-between items-center border-b border-zinc-900">
+                        <h1 class="text-xl font-black italic text-indigo-500">DARK ANGEL</h1>
+                        <div id="btn-profile" class="w-10 h-10 rounded-xl overflow-hidden border border-zinc-800 cursor-pointer">
+                            <img src="${userProfile.photoURL}" class="w-full h-full object-cover">
+                        </div>
+                    </header>
+                    <div id="main-content" class="flex-1 overflow-y-auto p-4 space-y-4 hide-scrollbar">
+                        <div id="btn-global" class="p-8 rounded-[2.5rem] bg-indigo-900/20 border border-indigo-500/30 cursor-pointer transition-all active:scale-95">
+                            <i class="fa-solid fa-globe text-indigo-400 mb-2"></i>
+                            <h3 class="text-xl font-black uppercase italic">Canal Global</h3>
+                            <p class="text-indigo-300/50 text-[9px] font-black uppercase">Broadcast Aberto</p>
+                        </div>
+                        <div id="users-list" class="space-y-3">
+                            <h2 class="text-[10px] font-black text-zinc-700 uppercase tracking-widest mt-6 mb-2 ml-2">Operadores Online</h2>
+                        </div>
+                    </div>
+                </div>
+            `;
+            document.getElementById('btn-profile').onclick = renderProfile;
+            document.getElementById('btn-global').onclick = () => startChat('global');
+            loadUsers();
+        }
+
+        function renderChat(type, targetUser = null) {
+            appContainer.innerHTML = `
+                <div class="flex flex-col h-full">
+                    <header class="p-4 border-b border-zinc-900 flex items-center gap-4">
+                        <button id="chat-back" class="p-2 text-zinc-500"><i class="fa-solid fa-arrow-left"></i></button>
+                        <div class="flex flex-col">
+                            <h2 class="font-black text-xs uppercase italic tracking-widest">
+                                ${type === 'global' ? 'Global Channel' : targetUser.codename}
+                            </h2>
+                            <span class="text-[8px] text-green-500 font-black uppercase tracking-tighter">Sinal Seguro</span>
+                        </div>
+                    </header>
+                    <div id="messages-container" class="flex-1 overflow-y-auto p-4 space-y-4 hide-scrollbar"></div>
+                    <form id="chat-form" class="p-4 bg-[#050507]">
+                        <div class="bg-[#0c0c0e] rounded-2xl flex items-center px-4 py-2 border border-zinc-800">
+                            <input type="text" id="chat-input" placeholder="Transmitir..." class="flex-1 bg-transparent border-none outline-none py-3 text-sm">
+                            <button type="submit" class="text-indigo-500"><i class="fa-solid fa-paper-plane"></i></button>
+                        </div>
+                    </form>
+                </div>
+            `;
+            document.getElementById('chat-back').onclick = renderMain;
+            document.getElementById('chat-form').onsubmit = (e) => {
+                e.preventDefault();
+                const text = document.getElementById('chat-input').value;
+                if(text.trim()) sendMessage(text, type, targetUser);
+                document.getElementById('chat-input').value = '';
+            };
+            loadMessages(type, targetUser);
+        }
+
+        function renderProfile() {
+            appContainer.innerHTML = `
+                <div class="h-full flex flex-col p-6 space-y-10">
+                    <button id="profile-back" class="w-fit p-3 bg-zinc-900 rounded-xl"><i class="fa-solid fa-arrow-left"></i></button>
+                    <div class="flex flex-col items-center gap-6">
+                        <img src="${userProfile.photoURL}" class="w-32 h-32 rounded-[2.5rem] border-4 border-indigo-600 shadow-2xl">
+                        <div class="text-center">
+                            <h2 class="text-2xl font-black italic">@${userProfile.codename}</h2>
+                            <p class="text-zinc-600 text-[10px] font-bold uppercase tracking-widest mt-1">${userProfile.email}</p>
+                        </div>
+                        <button id="btn-logout" class="w-full max-w-xs p-5 bg-red-500/10 text-red-500 font-black uppercase rounded-2xl border border-red-500/20">Desligar Terminal</button>
+                    </div>
+                </div>
+            `;
+            document.getElementById('profile-back').onclick = renderMain;
+            document.getElementById('btn-logout').onclick = () => signOut(auth);
+        }
+
+        // --- LÓGICA FIREBASE ---
+
+        onAuthStateChanged(auth, async (user) => {
+            renderLoading();
+            if (user) {
+                currentUser = user;
+                const userSnap = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'users', user.uid));
+                if (userSnap.exists()) {
+                    userProfile = userSnap.data();
+                    renderMain();
+                } else {
+                    renderSetup();
+                }
+            } else {
+                renderAuthSelection();
+            }
+        });
+
+        async function loginWithGoogle() {
+            try { await signInWithPopup(auth, provider); } catch(e) { alert("Erro Google"); }
+        }
+
+        async function loginEmail(email, pass) {
+            try { await signInWithEmailAndPassword(auth, email, pass); } catch(e) { alert("Erro de Login"); }
+        }
+
+        async function registerEmail(email, pass, nome, tel) {
+            try { 
+                await createUserWithEmailAndPassword(auth, email, pass);
+                // Guardamos temporariamente no perfil local para o setup salvar depois
+                userProfile = { nomeReal: nome, telefone: tel };
+            } catch(e) { alert("Erro de Registro"); }
+        }
+
+        async function finishSetup(codename, photo) {
+            if(!codename) return alert("Codinome obrigatório");
+            const data = {
+                uid: currentUser.uid,
+                codename,
+                photoURL: photo,
+                email: currentUser.email,
+                createdAt: serverTimestamp()
+            };
+            await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'users', currentUser.uid), data);
+            userProfile = data;
+            renderMain();
+        }
+
+        function loadUsers() {
+            onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'users'), (snap) => {
+                const list = document.getElementById('users-list');
+                if(!list) return;
+                list.innerHTML = '<h2 class="text-[10px] font-black text-zinc-700 uppercase tracking-widest mt-6 mb-2 ml-2">Operadores Online</h2>';
+                snap.forEach(doc => {
+                    const u = doc.data();
+                    if(u.uid === currentUser.uid) return;
+                    const div = document.createElement('div');
+                    div.className = "flex items-center gap-4 p-4 rounded-2xl bg-zinc-900/20 border border-zinc-800 cursor-pointer active:bg-zinc-800 transition-all";
+                    div.innerHTML = `
+                        <img src="${u.photoURL}" class="w-10 h-10 rounded-lg object-cover grayscale opacity-50">
+                        <div class="flex-1 font-bold text-sm">@${u.codename}</div>
+                        <i class="fa-solid fa-chevron-right text-[10px] text-zinc-800"></i>
+                    `;
+                    div.onclick = () => startChat('dm', u);
+                    list.appendChild(div);
+                });
+            });
+        }
+
+        function startChat(type, target = null) {
+            renderChat(type, target);
+        }
+
+        async function sendMessage(text, type, target) {
+            const path = type === 'global' 
+                ? `artifacts/${appId}/public/data/global_messages` 
+                : `artifacts/${appId}/public/data/dm_${[currentUser.uid, target.uid].sort().join('_')}`;
+            
+            await addDoc(collection(db, path), {
+                text,
+                senderId: currentUser.uid,
+                senderName: userProfile.codename,
+                avatar: userProfile.photoURL,
+                timestamp: serverTimestamp()
+            });
+        }
+
+        function loadMessages(type, target) {
+            if(unsubMessages) unsubMessages();
+            const path = type === 'global' 
+                ? `artifacts/${appId}/public/data/global_messages` 
+                : `artifacts/${appId}/public/data/dm_${[currentUser.uid, target.uid].sort().join('_')}`;
+            
+            const q = query(collection(db, path), orderBy('timestamp', 'asc'));
+            unsubMessages = onSnapshot(q, (snap) => {
+                const container = document.getElementById('messages-container');
+                if(!container) return;
+                container.innerHTML = '';
+                snap.forEach(doc => {
+                    const m = doc.data();
+                    const isMe = m.senderId === currentUser.uid;
+                    const div = document.createElement('div');
+                    div.className = `flex gap-3 ${isMe ? 'flex-row-reverse' : ''}`;
+                    div.innerHTML = `
+                        <div class="max-w-[80%] flex flex-col ${isMe ? 'items-end' : 'items-start'}">
+                            ${!isMe ? `<span class="text-[8px] font-black text-zinc-700 mb-1 uppercase tracking-widest">@${m.senderName}</span>` : ''}
+                            <div class="px-4 py-2.5 rounded-2xl text-sm ${isMe ? 'bg-indigo-600 text-white rounded-tr-none' : 'bg-zinc-900 border border-zinc-800 text-zinc-300 rounded-tl-none'}">
+                                ${m.text}
+                            </div>
+                        </div>
+                    `;
+                    container.appendChild(div);
+                });
+                container.scrollTop = container.scrollHeight;
+            });
+        }
+    </script>
+</body>
+</html>
+
