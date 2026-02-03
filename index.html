@@ -12,25 +12,26 @@
         .glass-card { background: rgba(12, 12, 14, 0.98); border: 1px solid #27272a; backdrop-filter: blur(10px); }
         .hide-scrollbar::-webkit-scrollbar { display: none; }
         input { font-size: 16px !important; }
-        .pulse-fast { animation: pulse 1s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
-        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .3; } }
+        
+        /* Animação de erro */
+        .shake { animation: shake 0.4s cubic-bezier(.36,.07,.19,.97) both; }
+        @keyframes shake { 10%, 90% { transform: translate3d(-1px, 0, 0); } 20%, 80% { transform: translate3d(2px, 0, 0); } 30%, 50%, 70% { transform: translate3d(-4px, 0, 0); } 40%, 60% { transform: translate3d(4px, 0, 0); } }
     </style>
 </head>
 <body>
 
     <div id="app" class="h-screen w-full flex flex-col relative overflow-hidden">
-        <!-- Loader Inicial com botão de emergência -->
-        <div id="boot-loader" class="h-screen bg-[#050507] flex flex-col items-center justify-center space-y-6">
-            <div class="text-indigo-500 font-black tracking-[0.3em] italic pulse-fast text-sm">DARK ANGEL</div>
-            <div id="loader-status" class="text-[9px] text-zinc-700 uppercase font-bold tracking-widest">Sincronizando Satélite...</div>
-            <button id="emergency-logout" class="hidden mt-10 text-[10px] text-red-900 font-bold border border-red-900/30 px-4 py-2 rounded-full uppercase">Forçar Logout</button>
+        <!-- Loader Inicial -->
+        <div id="boot-loader" class="h-screen bg-[#050507] flex flex-col items-center justify-center space-y-4">
+            <div class="text-indigo-500 font-black tracking-[0.3em] italic animate-pulse text-sm">DARK ANGEL</div>
+            <div id="status-text" class="text-[9px] text-zinc-600 uppercase font-bold tracking-widest">Iniciando Protocolos...</div>
         </div>
     </div>
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-app.js";
         import { getAuth, onAuthStateChanged, signInWithPopup, GoogleAuthProvider, signOut } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-auth.js";
-        import { getFirestore, doc, setDoc, getDoc, collection, addDoc, query, onSnapshot, serverTimestamp, orderBy } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore.js";
+        import { getFirestore, doc, setDoc, getDoc, getDocs, collection, addDoc, query, where, onSnapshot, serverTimestamp, orderBy } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyAAKqeX0Aq0n4OzgilX-5Q1PPVoSiPXCIc",
@@ -51,17 +52,13 @@
         let userProfile = null;
         const appContainer = document.getElementById('app');
 
-        // Botão de emergência aparece após 5 segundos se travar
-        setTimeout(() => {
-            const btn = document.getElementById('emergency-logout');
-            if(btn) btn.classList.remove('hidden');
-        }, 5000);
-
-        document.getElementById('emergency-logout').onclick = () => signOut(auth).then(() => location.reload());
-
-        function setStatus(txt) {
-            const el = document.getElementById('loader-status');
-            if(el) el.textContent = txt;
+        // --- UTILITÁRIOS ---
+        function showToast(msg, isError = false) {
+            const el = document.createElement('div');
+            el.className = `fixed top-6 left-1/2 -translate-x-1/2 z-50 px-6 py-3 rounded-full border text-[10px] font-black uppercase tracking-widest shadow-xl animate-bounce ${isError ? 'bg-red-500 text-white border-red-700' : 'bg-green-500 text-black border-green-400'}`;
+            el.textContent = msg;
+            document.body.appendChild(el);
+            setTimeout(() => el.remove(), 4000);
         }
 
         // --- TELAS ---
@@ -70,59 +67,132 @@
             appContainer.innerHTML = `
                 <div class="h-screen flex flex-col items-center justify-center p-8 text-center space-y-12">
                     <div class="space-y-2">
-                        <i class="fa-solid fa-ghost text-indigo-600 text-5xl mb-4"></i>
+                        <i class="fa-solid fa-user-secret text-indigo-600 text-6xl mb-4 shadow-indigo-500/50"></i>
                         <h1 class="text-4xl font-black italic tracking-tighter">DARK ANGEL</h1>
-                        <p class="text-zinc-600 text-[10px] font-bold uppercase tracking-[0.4em]">Protocolo de Acesso</p>
+                        <p class="text-zinc-600 text-[10px] font-bold uppercase tracking-[0.4em]">Acesso Restrito</p>
                     </div>
-                    <button id="btn-google" class="w-full max-w-xs bg-white text-black py-4 rounded-2xl font-black uppercase text-sm flex items-center justify-center gap-3 active:scale-95 transition-all">
+                    <button id="btn-google" class="w-full max-w-xs bg-white text-black py-4 rounded-2xl font-black uppercase text-sm flex items-center justify-center gap-3 active:scale-95 transition-all shadow-lg shadow-white/10">
                         <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/pwa/google.svg" class="w-5"> Entrar com Google
                     </button>
+                    <p class="text-[8px] text-zinc-700 max-w-[200px]">Ao entrar, você concorda com o protocolo de anonimato da rede.</p>
                 </div>
             `;
             document.getElementById('btn-google').onclick = () => {
                 signInWithPopup(auth, provider).catch(e => {
-                    alert("Erro: Certifique-se que o domínio " + window.location.hostname + " está autorizado no Firebase.");
+                    alert("Erro de Autenticação: " + e.message);
                 });
             };
         }
 
         function renderSetup() {
+            // Define avatar inicial (Google ou Padrão)
+            let currentAvatar = currentUser.photoURL || 'https://api.dicebear.com/7.x/avataaars/svg?seed=Dark';
+            
             appContainer.innerHTML = `
-                <div class="h-screen flex flex-col items-center justify-center p-8 animate-in fade-in duration-500">
-                    <div class="glass-card w-full max-w-sm p-8 rounded-[3rem] space-y-8 text-center">
-                        <div class="space-y-2">
-                            <h2 class="text-xl font-black italic uppercase text-indigo-500">Novo Operador</h2>
-                            <p class="text-[9px] text-zinc-600 font-bold uppercase">Configure sua identidade no terminal</p>
+                <div class="h-screen flex flex-col items-center justify-center p-6 bg-[#050507] animate-in fade-in">
+                    <div class="glass-card w-full max-w-sm p-8 rounded-[2.5rem] space-y-6 text-center border border-zinc-800">
+                        <h2 class="text-xl font-black italic uppercase text-indigo-500">Configurar Identidade</h2>
+                        
+                        <!-- Preview da Foto -->
+                        <div class="relative w-28 h-28 mx-auto group">
+                            <img id="avatar-preview" src="${currentAvatar}" class="w-full h-full rounded-[2rem] border-4 border-indigo-600 object-cover bg-zinc-900 shadow-2xl">
+                            <div class="absolute -bottom-2 -right-2 bg-indigo-600 p-2 rounded-xl border-4 border-[#0c0c0e]">
+                                <i class="fa-solid fa-camera text-white text-xs"></i>
+                            </div>
                         </div>
-                        <div class="relative w-24 h-24 mx-auto">
-                            <img id="setup-img" src="${currentUser.photoURL || 'https://api.dicebear.com/7.x/avataaars/svg?seed=Dark'}" class="w-24 h-24 rounded-[2rem] border-2 border-indigo-600 object-cover bg-zinc-900">
+
+                        <!-- Seleção de Avatares -->
+                        <div class="flex justify-center gap-3">
+                            <button class="avatar-option w-10 h-10 rounded-lg overflow-hidden border-2 border-transparent hover:border-white transition-all" data-src="${currentUser.photoURL || ''}">
+                                <img src="${currentUser.photoURL || 'https://via.placeholder.com/40'}" class="w-full h-full object-cover">
+                            </button>
+                            <button class="avatar-option w-10 h-10 rounded-lg overflow-hidden border-2 border-transparent hover:border-white transition-all" data-src="https://api.dicebear.com/7.x/avataaars/svg?seed=Shadow">
+                                <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=Shadow" class="w-full h-full object-cover">
+                            </button>
+                            <button class="avatar-option w-10 h-10 rounded-lg overflow-hidden border-2 border-transparent hover:border-white transition-all" data-src="https://api.dicebear.com/7.x/avataaars/svg?seed=Ghost">
+                                <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=Ghost" class="w-full h-full object-cover">
+                            </button>
+                            <button class="avatar-option w-10 h-10 rounded-lg overflow-hidden border-2 border-transparent hover:border-white transition-all" data-src="https://api.dicebear.com/7.x/avataaars/svg?seed=Raven">
+                                <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=Raven" class="w-full h-full object-cover">
+                            </button>
                         </div>
-                        <div class="space-y-4">
-                            <input type="text" id="setup-code" placeholder="DIGITE SEU CODINOME" class="w-full bg-zinc-900 border border-zinc-800 p-5 rounded-2xl font-black text-center outline-none focus:border-indigo-500 uppercase tracking-tighter">
-                            <button id="save-setup" class="w-full bg-indigo-600 text-white py-5 rounded-2xl font-black uppercase tracking-widest active:scale-95 transition-all shadow-lg shadow-indigo-600/20">Ativar Terminal</button>
+
+                        <div class="space-y-4 pt-2">
+                            <div>
+                                <label class="text-[9px] font-black text-zinc-600 uppercase tracking-widest mb-1 block">Codinome (Único)</label>
+                                <input type="text" id="setup-code" placeholder="DIGITE SEU NOME" class="w-full bg-zinc-900 border border-zinc-800 p-4 rounded-xl font-black text-center outline-none focus:border-indigo-500 uppercase tracking-tighter text-white">
+                            </div>
+                            <button id="save-setup" class="w-full bg-indigo-600 text-white py-4 rounded-2xl font-black uppercase tracking-widest active:scale-95 transition-all shadow-lg shadow-indigo-600/20">
+                                Ativar Terminal
+                            </button>
                         </div>
                     </div>
                 </div>
             `;
-            document.getElementById('save-setup').onclick = async () => {
-                const code = document.getElementById('setup-code').value.trim().toLowerCase().replace(/\s/g, '');
-                if(!code || code.length < 3) return alert("Codinome muito curto ou inválido.");
-                
-                setStatus("Registrando Identidade...");
-                const profile = {
-                    uid: currentUser.uid,
-                    codename: code,
-                    photoURL: currentUser.photoURL || 'https://api.dicebear.com/7.x/avataaars/svg?seed=Dark',
-                    email: currentUser.email,
-                    createdAt: serverTimestamp()
+
+            // Lógica de Troca de Foto
+            document.querySelectorAll('.avatar-option').forEach(btn => {
+                btn.onclick = () => {
+                    const src = btn.getAttribute('data-src');
+                    if(src) {
+                        currentAvatar = src;
+                        document.getElementById('avatar-preview').src = src;
+                        // Feedback visual na seleção
+                        document.querySelectorAll('.avatar-option').forEach(b => b.classList.remove('border-indigo-500'));
+                        btn.classList.add('border-indigo-500');
+                    }
                 };
-                
+            });
+
+            // Lógica de Salvar com Verificação de Nome Único
+            document.getElementById('save-setup').onclick = async () => {
+                const btn = document.getElementById('save-setup');
+                const input = document.getElementById('setup-code');
+                const code = input.value.trim().toLowerCase().replace(/\s/g, '');
+
+                if(!code || code.length < 3) {
+                    showToast("Nome muito curto (min 3 letras)", true);
+                    input.classList.add('shake');
+                    setTimeout(() => input.classList.remove('shake'), 500);
+                    return;
+                }
+
+                btn.disabled = true;
+                btn.textContent = "VERIFICANDO DISPONIBILIDADE...";
+                btn.classList.add('opacity-50');
+
                 try {
-                    await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'users', currentUser.uid), profile);
-                    userProfile = profile;
+                    // 1. Verifica se o nome já existe
+                    const usersRef = collection(db, 'artifacts', appId, 'public', 'data', 'users');
+                    const q = query(usersRef, where("codename", "==", code));
+                    const querySnapshot = await getDocs(q);
+
+                    if (!querySnapshot.empty) {
+                        throw new Error("ESTE CODINOME JÁ ESTÁ EM USO!");
+                    }
+
+                    // 2. Se não existe, salva o perfil
+                    btn.textContent = "REGISTRANDO NA REDE...";
+                    
+                    const profileData = {
+                        uid: currentUser.uid,
+                        codename: code,
+                        photoURL: currentAvatar,
+                        email: currentUser.email,
+                        createdAt: serverTimestamp()
+                    };
+
+                    await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'users', currentUser.uid), profileData);
+                    
+                    userProfile = profileData;
                     renderMain();
-                } catch(e) {
-                    alert("Erro ao salvar: Verifique as regras do Firestore.");
+
+                } catch (error) {
+                    btn.disabled = false;
+                    btn.textContent = "TENTAR NOVAMENTE";
+                    btn.classList.remove('opacity-50');
+                    showToast(error.message, true);
+                    console.error(error);
                 }
             };
         }
@@ -132,17 +202,17 @@
                 <div class="flex flex-col h-full bg-[#050507]">
                     <header class="p-6 flex justify-between items-center border-b border-zinc-900/50">
                         <div class="flex items-center gap-3">
-                            <div class="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                            <div class="w-2 h-2 bg-green-500 rounded-full animate-pulse shadow-[0_0_10px_#22c55e]"></div>
                             <h1 class="text-lg font-black italic text-indigo-500 tracking-tighter">DARK ANGEL</h1>
                         </div>
-                        <img id="go-profile" src="${userProfile.photoURL}" class="w-10 h-10 rounded-xl border border-zinc-800 cursor-pointer object-cover">
+                        <img id="go-profile" src="${userProfile.photoURL}" class="w-10 h-10 rounded-xl border border-zinc-800 cursor-pointer object-cover bg-zinc-900">
                     </header>
                     <div class="flex-1 overflow-y-auto p-6 space-y-6 hide-scrollbar">
                         <div id="go-global" class="group relative overflow-hidden p-8 rounded-[2.5rem] bg-indigo-600/10 border border-indigo-500/20 active:scale-95 transition-all cursor-pointer">
                             <div class="relative z-10">
-                                <i class="fa-solid fa-tower-broadcast text-indigo-400 mb-3 text-2xl"></i>
-                                <h3 class="text-xl font-black italic uppercase">Frequência Global</h3>
-                                <p class="text-[9px] font-bold text-indigo-500/40 uppercase tracking-[0.2em]">Canais Abertos</p>
+                                <i class="fa-solid fa-satellite-dish text-indigo-400 mb-3 text-2xl"></i>
+                                <h3 class="text-xl font-black italic uppercase text-white">Frequência Global</h3>
+                                <p class="text-[9px] font-bold text-indigo-500/50 uppercase tracking-[0.2em]">Canal Aberto</p>
                             </div>
                         </div>
                         <div id="users-container" class="space-y-3">
@@ -163,13 +233,16 @@
                     const u = d.data();
                     if(u.uid === currentUser.uid) return;
                     const item = document.createElement('div');
-                    item.className = "flex items-center gap-4 p-4 rounded-2xl bg-zinc-900/40 border border-zinc-800 active:bg-zinc-800 transition-all cursor-pointer";
+                    item.className = "flex items-center gap-4 p-4 rounded-2xl bg-zinc-900/30 border border-zinc-800 active:bg-zinc-800 transition-all cursor-pointer hover:border-indigo-500/30";
                     item.innerHTML = `
                         <div class="relative">
                             <img src="${u.photoURL}" class="w-12 h-12 rounded-2xl grayscale object-cover">
                             <div class="absolute -bottom-1 -right-1 w-3 h-3 bg-green-500 border-2 border-[#050507] rounded-full"></div>
                         </div>
-                        <span class="flex-1 font-black text-sm uppercase tracking-tighter text-zinc-400">@${u.codename}</span>
+                        <div class="flex-1">
+                            <span class="block font-black text-sm uppercase tracking-tighter text-zinc-300">@${u.codename}</span>
+                            <span class="block text-[8px] text-zinc-600 font-bold uppercase tracking-widest">Conexão Segura</span>
+                        </div>
                     `;
                     item.onclick = () => renderChat('dm', u);
                     container.appendChild(item);
@@ -180,20 +253,20 @@
         function renderChat(type, target = null) {
             appContainer.innerHTML = `
                 <div class="flex flex-col h-full bg-[#050507]">
-                    <header class="p-5 border-b border-zinc-900 flex items-center gap-4">
-                        <button id="back-main" class="p-2 text-zinc-600"><i class="fa-solid fa-chevron-left"></i></button>
+                    <header class="p-5 border-b border-zinc-900 flex items-center gap-4 bg-[#050507]/80 backdrop-blur-md sticky top-0 z-10">
+                        <button id="back-main" class="p-2 text-zinc-500 hover:text-white transition-colors"><i class="fa-solid fa-chevron-left"></i></button>
                         <div class="flex flex-col">
-                            <span class="font-black text-[10px] uppercase italic tracking-widest text-indigo-500">
-                                ${type === 'global' ? 'Broadcast Global' : 'Privado: ' + target.codename}
+                            <span class="font-black text-[10px] uppercase italic tracking-widest text-indigo-400">
+                                ${type === 'global' ? 'Broadcast Global' : target.codename}
                             </span>
-                            <span class="text-[7px] text-zinc-700 font-bold uppercase">Conexão P2P Ativa</span>
+                            <span class="text-[7px] text-zinc-600 font-bold uppercase flex items-center gap-1"><i class="fa-solid fa-lock text-[6px]"></i> Encriptado</span>
                         </div>
                     </header>
-                    <div id="msgs" class="flex-1 overflow-y-auto p-6 space-y-6 hide-scrollbar bg-[radial-gradient(circle_at_top,rgba(79,70,229,0.03),transparent)]"></div>
-                    <form id="send-form" class="p-6 bg-[#050507]">
-                        <div class="bg-zinc-900/50 border border-zinc-800/50 rounded-2xl flex items-center px-4 py-1">
-                            <input type="text" id="m-input" placeholder="Digite sua mensagem..." class="flex-1 bg-transparent border-none outline-none py-4 text-sm font-medium">
-                            <button type="submit" class="text-indigo-500 p-2 active:scale-90 transition-all"><i class="fa-solid fa-paper-plane text-xl"></i></button>
+                    <div id="msgs" class="flex-1 overflow-y-auto p-6 space-y-6 hide-scrollbar"></div>
+                    <form id="send-form" class="p-4 bg-[#050507] border-t border-zinc-900">
+                        <div class="bg-zinc-900 border border-zinc-800 rounded-2xl flex items-center px-4 py-1 focus-within:border-indigo-500/50 transition-colors">
+                            <input type="text" id="m-input" placeholder="Mensagem..." class="flex-1 bg-transparent border-none outline-none py-4 text-sm font-medium text-white placeholder-zinc-700">
+                            <button type="submit" class="text-indigo-500 p-2 active:scale-90 transition-all"><i class="fa-solid fa-paper-plane text-lg"></i></button>
                         </div>
                     </form>
                 </div>
@@ -211,7 +284,7 @@
                     div.innerHTML += `
                         <div class="flex ${isMe ? 'justify-end' : 'justify-start'} animate-in slide-in-from-bottom-2 duration-300">
                             <div class="max-w-[85%]">
-                                ${!isMe && type === 'global' ? `<span class="text-[8px] font-black text-zinc-700 uppercase ml-2 mb-1 block">@${m.sname || 'Agente'}</span>` : ''}
+                                ${!isMe && type === 'global' ? `<span class="text-[8px] font-black text-zinc-600 uppercase ml-2 mb-1 block">@${m.sname || 'Agente'}</span>` : ''}
                                 <div class="px-5 py-3 rounded-[1.5rem] text-[13px] leading-relaxed ${isMe ? 'bg-indigo-600 text-white rounded-tr-none shadow-lg shadow-indigo-600/10' : 'bg-zinc-900 border border-zinc-800 text-zinc-300 rounded-tl-none'}">
                                     ${m.txt}
                                 </div>
@@ -239,20 +312,18 @@
 
         function renderProfile() {
             appContainer.innerHTML = `
-                <div class="h-full flex flex-col items-center justify-center p-10 space-y-10 animate-in fade-in">
-                    <div class="relative">
-                        <img src="${userProfile.photoURL}" class="w-40 h-40 rounded-[3rem] border-4 border-indigo-600 shadow-2xl object-cover">
-                        <div class="absolute -bottom-2 -right-2 bg-indigo-600 p-3 rounded-2xl shadow-xl">
-                            <i class="fa-solid fa-check-double text-white text-sm"></i>
-                        </div>
+                <div class="h-full flex flex-col items-center justify-center p-10 space-y-10 animate-in fade-in bg-[#050507]">
+                    <div class="relative group">
+                        <img src="${userProfile.photoURL}" class="w-32 h-32 rounded-[3rem] border-4 border-indigo-600 shadow-[0_0_30px_rgba(79,70,229,0.3)] object-cover bg-zinc-900">
+                        <div class="absolute -bottom-2 -right-2 bg-green-500 p-2 rounded-full border-4 border-[#050507]"></div>
                     </div>
-                    <div class="text-center space-y-1">
-                        <h2 class="text-3xl font-black italic uppercase tracking-tighter">@${userProfile.codename}</h2>
-                        <p class="text-zinc-600 text-[10px] font-bold uppercase tracking-widest">${userProfile.email}</p>
+                    <div class="text-center space-y-2">
+                        <h2 class="text-3xl font-black italic uppercase tracking-tighter text-white">@${userProfile.codename}</h2>
+                        <p class="text-zinc-600 text-[10px] font-bold uppercase tracking-widest px-4 py-1 bg-zinc-900 rounded-full border border-zinc-800">${userProfile.email}</p>
                     </div>
-                    <div class="w-full space-y-3">
-                        <button id="logout" class="w-full p-5 bg-red-500/10 text-red-500 font-black uppercase tracking-widest rounded-2xl border border-red-500/20 active:scale-95 transition-all">Encerrar Sessão</button>
-                        <button id="prof-back" class="w-full p-5 text-zinc-600 font-black uppercase tracking-widest text-[10px]">Voltar ao Terminal</button>
+                    <div class="w-full space-y-3 pt-6">
+                        <button id="logout" class="w-full p-5 bg-red-500/10 text-red-500 font-black uppercase tracking-widest rounded-2xl border border-red-500/20 active:scale-95 transition-all hover:bg-red-500/20">Desligar Terminal</button>
+                        <button id="prof-back" class="w-full p-5 text-zinc-600 font-black uppercase tracking-widest text-[10px] hover:text-white transition-colors">Voltar</button>
                     </div>
                 </div>
             `;
@@ -260,31 +331,35 @@
             document.getElementById('logout').onclick = () => signOut(auth).then(() => location.reload());
         }
 
-        // --- AUTH OBSERVER (Lógica de Força Bruta) ---
+        // --- INICIALIZAÇÃO SEGURA ---
         onAuthStateChanged(auth, async (user) => {
             if (user) {
                 currentUser = user;
-                setStatus("Buscando Perfil...");
+                document.getElementById('status-text').textContent = "Buscando Credenciais...";
                 
-                // Tenta buscar o perfil por até 3 segundos
-                const timeoutPromise = new Promise(resolve => setTimeout(() => resolve(null), 3500));
+                // Timeout de segurança: Se o Firestore não responder em 4s, assume usuário novo
+                const timeoutPromise = new Promise(resolve => setTimeout(() => resolve('timeout'), 4000));
                 const fetchPromise = getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'users', user.uid));
                 
-                const snap = await Promise.race([fetchPromise, timeoutPromise]);
-                
-                if (snap && snap.exists()) {
-                    userProfile = snap.data();
-                    renderMain();
-                } else {
-                    // Se não existir ou demorar demais, força o Setup
-                    renderSetup();
+                try {
+                    const result = await Promise.race([fetchPromise, timeoutPromise]);
+                    
+                    if (result !== 'timeout' && result.exists()) {
+                        userProfile = result.data();
+                        renderMain();
+                    } else {
+                        renderSetup(); // Força o setup se não achar perfil ou demorar
+                    }
+                } catch (e) {
+                    console.error(e);
+                    renderSetup(); // Erro de permissão = Setup
                 }
             } else {
                 renderAuth();
             }
         });
-
     </script>
 </body>
 </html>
+
 
