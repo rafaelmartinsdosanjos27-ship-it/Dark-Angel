@@ -2,92 +2,361 @@
 <html lang="pt-pt">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Dark Angel - Elite</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dark Angel - Nexus</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Inter:wght@300;400;700;900&display=swap" rel="stylesheet">
     <style>
-        :root { --wa-bg: #0b141a; --wa-panel: #111b21; --wa-sent: #005c4b; --wa-received: #202c33; --wa-input-bg: #2a3942; }
-        body, html { font-family: sans-serif; background-color: #000; margin: 0; height: 100%; overflow: hidden; }
-        .app-container { width: 100%; height: 100%; display: flex; flex-direction: column; background-color: var(--wa-bg); margin: 0 auto; position: relative; }
-        @media (min-width: 768px) { .app-container { max-width: 500px; border-left: 1px solid #222e35; border-right: 1px solid #222e35; } }
-        #chat-content { flex: 1; overflow-y: auto; display: flex; flex-direction: column; padding: 12px; z-index: 10; }
-        .bubble { max-width: 85%; padding: 8px 12px; font-size: 15px; margin-bottom: 8px; border-radius: 12px; position: relative; }
-        .sent { background-color: var(--wa-sent); align-self: flex-end; color: #fff; border-bottom-right-radius: 2px; }
-        .received { background-color: var(--wa-received); align-self: flex-start; color: #e9edef; border-bottom-left-radius: 2px; }
-        .input-area { background-color: var(--wa-panel); padding: 10px; display: flex; align-items: center; gap: 8px; }
-        .input-wrapper { background-color: var(--wa-input-bg); border-radius: 24px; flex: 1; display: flex; padding: 0 15px; }
-        .send-btn { background-color: #00a884; width: 45px; height: 45px; border-radius: 50%; color: white; border: none; flex-shrink: 0; }
+        :root {
+            --purple-glow: 0 0 20px rgba(139, 92, 246, 0.4);
+        }
+        body {
+            background-color: #000;
+            color: #fff;
+            font-family: 'Inter', sans-serif;
+            overflow: hidden;
+            margin: 0;
+            height: 100vh;
+        }
+        .font-serif { font-family: 'Cinzel', serif; }
+        
+        .role-tag {
+            font-size: 8px;
+            font-weight: 900;
+            padding: 2px 6px;
+            border-radius: 4px;
+            text-transform: uppercase;
+            border-width: 1px;
+        }
+
+        .role-criador { color: #facc15; border-color: rgba(250, 204, 21, 0.3); background: rgba(250, 204, 21, 0.1); box-shadow: 0 0 10px rgba(250, 204, 21, 0.2); }
+        .role-developer { color: #22d3ee; border-color: rgba(34, 211, 238, 0.3); background: rgba(34, 211, 238, 0.1); }
+        .role-admin { color: #ef4444; border-color: rgba(239, 68, 68, 0.3); background: rgba(239, 68, 68, 0.1); }
+        .role-staff { color: #a855f7; border-color: rgba(168, 85, 247, 0.3); background: rgba(168, 85, 247, 0.1); }
+        .role-suporte { color: #4ade80; border-color: rgba(74, 222, 128, 0.3); background: rgba(74, 222, 128, 0.1); }
+        .role-membro { color: #9ca3af; border-color: rgba(156, 163, 175, 0.3); background: rgba(156, 163, 175, 0.1); }
+
+        .nexus-card {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(10px);
+            border-radius: 24px;
+        }
+
+        .loading-screen {
+            position: fixed;
+            inset: 0;
+            background: #000;
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .overlay-screen {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: #000;
+            z-index: 9000;
+            text-align: center;
+            padding: 40px;
+        }
+
+        #gameCanvas {
+            width: 100%;
+            height: 100%;
+            background: #050505;
+            touch-action: none;
+        }
     </style>
 </head>
 <body>
-    <div id="app" class="app-container"></div>
+
+    <!-- Loading Screen -->
+    <div id="loadingScreen" class="loading-screen">
+        <div class="w-12 h-12 border-4 border-purple-500 border-t-transparent rounded-full animate-spin"></div>
+    </div>
+
+    <!-- Login Screen -->
+    <div id="loginScreen" class="hidden fixed inset-0 bg-black flex flex-col items-center justify-center p-6 text-center z-[9500]">
+        <h1 class="text-4xl font-serif text-white mb-2">DARK <span class="text-purple-500">ANGEL</span></h1>
+        <p class="text-gray-500 text-[10px] uppercase tracking-[0.3em] mb-12">Nexus Access Protocol</p>
+        <button id="googleLoginBtn" class="bg-white text-black px-10 py-5 rounded-3xl font-black flex items-center gap-4 active:scale-95 transition-all">
+            <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/action/google.svg" class="w-6" alt="Google">
+            ENTRAR COM GOOGLE
+        </button>
+    </div>
+
+    <!-- Maintenance/Ban Screens -->
+    <div id="maintenanceScreen" class="overlay-screen flex-col items-center justify-center">
+        <div class="text-7xl mb-6">🛠️</div>
+        <h1 class="text-yellow-500 text-3xl font-serif mb-4">MANUTENÇÃO</h1>
+        <p class="text-gray-500 max-w-xs">O Criador está a estabilizar o Nexus.</p>
+    </div>
+
+    <div id="banScreen" class="overlay-screen flex-col items-center justify-center">
+        <h1 class="text-red-500 text-5xl font-serif mb-4">BANIDO</h1>
+        <p class="text-gray-500">Acesso negado permanentemente para este ID.</p>
+    </div>
+
+    <!-- Interface Principal (App) -->
+    <div id="app" class="hidden h-screen flex flex-col overflow-hidden">
+        <nav class="h-16 border-b border-white/5 bg-black/80 backdrop-blur-xl flex items-center justify-between px-6 shrink-0 z-50">
+            <div class="flex items-center gap-3">
+                <span class="font-serif text-lg">DARK <span class="text-purple-500">ANGEL</span></span>
+                <span id="myRoleTag" class="role-tag">...</span>
+            </div>
+            <div class="flex items-center gap-4">
+                <div class="text-yellow-500 font-bold text-sm"><span id="coinCount">0</span> ✧</div>
+                <button onclick="logout()" class="text-[10px] text-gray-500 font-black">SAIR</button>
+            </div>
+        </nav>
+
+        <main id="content" class="flex-1 overflow-y-auto p-6 pb-24">
+            <div id="view-arena" class="tab-view animate-in fade-in slide-in-from-bottom-4">
+                <h2 class="text-2xl font-serif mb-1">Saudações, <span id="userName">...</span></h2>
+                <p class="text-[9px] text-gray-500 font-bold uppercase tracking-widest mb-8">ID: <span id="userIdDisplay">...</span></p>
+                <div class="nexus-card p-8 text-center">
+                    <div class="w-20 h-20 bg-neutral-900 rounded-full mx-auto mb-6 flex items-center justify-center text-4xl shadow-inner border border-white/5">⚔️</div>
+                    <button onclick="openGame()" class="w-full py-5 bg-purple-600 rounded-2xl font-black uppercase tracking-[0.2em] shadow-lg shadow-purple-600/20 active:scale-95 transition-all">ENTRAR NA ARENA</button>
+                </div>
+            </div>
+
+            <div id="view-skins" class="tab-view hidden space-y-3">
+                <h2 class="text-xl font-serif mb-4">Arsenal</h2>
+                <div id="skinsList" class="space-y-3"></div>
+            </div>
+
+            <div id="view-admin" class="tab-view hidden space-y-6">
+                <h2 class="text-xl font-serif">Controlo</h2>
+                <div id="adminPanel" class="space-y-4"></div>
+            </div>
+        </main>
+
+        <footer class="h-20 bg-black/95 border-t border-white/5 flex items-center px-2 shrink-0 z-50">
+            <button onclick="switchTab('arena')" class="flex-1 flex flex-col items-center gap-1 text-purple-500" id="nav-arena">
+                <span class="text-xl">⚔️</span><span class="text-[9px] font-black uppercase">Arena</span>
+            </button>
+            <button onclick="switchTab('skins')" class="flex-1 flex flex-col items-center gap-1 text-gray-600" id="nav-skins">
+                <span class="text-xl">🎭</span><span class="text-[9px] font-black uppercase">Skins</span>
+            </button>
+            <button onclick="switchTab('admin')" class="flex-1 hidden flex-col items-center gap-1 text-gray-600" id="nav-admin">
+                <span class="text-xl">⚙️</span><span class="text-[9px] font-black uppercase">Admin</span>
+            </button>
+        </footer>
+    </div>
+
+    <!-- Arena Game View -->
+    <div id="gameOverlay" class="fixed inset-0 bg-black z-[10000] hidden flex flex-col">
+        <div class="h-16 border-b border-white/10 flex items-center justify-between px-6 bg-black">
+            <button onclick="closeGame()" class="text-[10px] font-black text-gray-500 uppercase">SAIR</button>
+            <div id="hpDisplay" class="text-red-500 font-bold text-xs uppercase">HP: 100%</div>
+        </div>
+        <div class="flex-1 relative bg-zinc-950">
+            <canvas id="gameCanvas"></canvas>
+        </div>
+        <div class="p-8 grid grid-cols-2 gap-4 bg-zinc-900 border-t border-white/5">
+            <div class="grid grid-cols-3 gap-2 w-max mx-auto">
+                <div></div><button class="w-14 h-14 bg-white/5 rounded-xl active:bg-purple-600" id="btn-up">▲</button><div></div>
+                <button class="w-14 h-14 bg-white/5 rounded-xl active:bg-purple-600" id="btn-left">◀</button>
+                <button class="w-14 h-14 bg-white/5 rounded-xl active:bg-purple-600" id="btn-down">▼</button>
+                <button class="w-14 h-14 bg-white/5 rounded-xl active:bg-purple-600" id="btn-right">▶</button>
+            </div>
+            <div class="flex items-center justify-center">
+                <button class="w-24 h-24 bg-red-600/20 border-2 border-red-600/40 rounded-full text-3xl active:bg-red-600" id="btn-atk">⚔️</button>
+            </div>
+        </div>
+    </div>
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-app.js";
-        import { getFirestore, collection, addDoc, query, onSnapshot, serverTimestamp, orderBy } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore.js";
-        import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-auth.js";
+        import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-auth.js";
+        import { getFirestore, doc, setDoc, getDoc, onSnapshot, collection, updateDoc, deleteDoc, query } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore.js";
 
-        const firebaseConfig = {
-            apiKey: "AIzaSyAAKqeX0Aq0n4OzgilX-5Q1PPVoSiPXCIc",
-            authDomain: "chat-geral-a3bba.firebaseapp.com",
-            projectId: "chat-geral-a3bba",
-            storageBucket: "chat-geral-a3bba.firebasestorage.app",
-            messagingSenderId: "1007033326627",
-            appId: "1:1007033326627:web:26f07d61a8f9ba1f642596"
+        const firebaseConfig = JSON.parse(__firebase_config);
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'dark-angel-v8';
+        const OWNER_EMAIL = "rafaelmartinsdosanjos27@gmail.com";
+
+        let myProfile = null;
+        let isMaintenance = false;
+
+        const ROLES = {
+            CRIADOR: { label: 'CRIADOR', class: 'role-criador', level: 6 },
+            DEVELOPER: { label: 'DEVELOPER', class: 'role-developer', level: 5 },
+            ADMINISTRADOR: { label: 'ADMIN', class: 'role-admin', level: 4 },
+            STAFF: { label: 'STAFF', class: 'role-staff', level: 3 },
+            SUPORTE: { label: 'SUPORTE', class: 'role-suporte', level: 2 },
+            MEMBRO: { label: 'MEMBRO', class: 'role-membro', level: 1 }
         };
 
-        const app = initializeApp(firebaseConfig);
-        const db = getFirestore(app);
-        const auth = getAuth(app);
-        let myUser = JSON.parse(localStorage.getItem('da_user')) || { name: "Agente_" + Math.floor(Math.random()*999) };
+        // --- AUTH ---
+        onAuthStateChanged(auth, async (user) => {
+            document.getElementById('loadingScreen').classList.add('hidden');
+            if (!user) {
+                document.getElementById('loginScreen').classList.remove('hidden');
+                document.getElementById('app').classList.add('hidden');
+                return;
+            }
 
-        async function init() {
-            await signInAnonymously(auth);
-            renderChat();
-        }
+            document.getElementById('loginScreen').classList.add('hidden');
+            
+            // Auto-Clean Criador Ban
+            if (user.email === OWNER_EMAIL) {
+                await deleteDoc(doc(db, 'artifacts', appId, 'public', 'bans', user.uid)).catch(()=>{});
+            }
 
-        function renderChat() {
-            document.getElementById('app').innerHTML = `
-                <header class="p-4 bg-[#111b21] text-white font-bold border-b border-white/5">DARK ANGEL - GLOBAL</header>
-                <div id="chat-content"></div>
-                <div class="input-area">
-                    <div class="input-wrapper">
-                        <input type="text" id="msg-in" placeholder="Mensagem" class="w-full bg-transparent border-none outline-none text-white py-3">
-                    </div>
-                    <button id="send-btn" class="send-btn"><i class="fa-solid fa-paper-plane"></i></button>
-                </div>`;
+            // Presence
+            setDoc(doc(db, 'artifacts', appId, 'public', 'presence', user.uid), {
+                uid: user.uid, name: user.displayName, email: user.email, lastSeen: Date.now()
+            }, { merge: true });
 
-            const q = query(collection(db, "global_messages"), orderBy("timestamp", "asc"));
-            onSnapshot(q, (snap) => {
-                const box = document.getElementById('chat-content');
-                box.innerHTML = '';
-                snap.forEach(doc => {
-                    const m = doc.data();
-                    const isMe = m.uid === auth.currentUser.uid;
-                    const div = document.createElement('div');
-                    div.className = `bubble ${isMe ? 'sent' : 'received'}`;
-                    div.innerHTML = `<div style="font-size:10px; color:#4ade80">${m.author}</div>${m.text}`;
-                    box.appendChild(div);
-                });
-                box.scrollTop = box.scrollHeight;
+            // Profile
+            onSnapshot(doc(db, 'artifacts', appId, 'users', user.uid, 'profile', 'data'), (snap) => {
+                if (snap.exists()) {
+                    myProfile = snap.data();
+                    updateUI(user);
+                } else {
+                    const defaultRole = user.email === OWNER_EMAIL ? 'CRIADOR' : 'MEMBRO';
+                    setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'profile', 'data'), {
+                        coins: 100, role: defaultRole, ownedSkins: ['default'], currentSkin: 'default', id: user.uid.substring(0, 8).toUpperCase()
+                    });
+                }
             });
 
-            const send = async () => {
-                const input = document.getElementById('msg-in');
-                if(!input.value.trim()) return;
-                await addDoc(collection(db, "global_messages"), {
-                    text: input.value,
-                    uid: auth.currentUser.uid,
-                    author: myUser.name,
-                    timestamp: serverTimestamp()
-                });
-                input.value = '';
-            };
-            document.getElementById('send-btn').onclick = send;
-            document.getElementById('msg-in').onkeypress = (e) => e.key === 'Enter' && send();
+            // Global Observers
+            onSnapshot(doc(db, 'artifacts', appId, 'public', 'bans', user.uid), (snap) => {
+                if (snap.exists() && user.email !== OWNER_EMAIL) {
+                    document.getElementById('banScreen').style.display = 'flex';
+                    document.getElementById('app').classList.add('hidden');
+                }
+            });
+
+            onSnapshot(doc(db, 'artifacts', appId, 'public', 'config'), (snap) => {
+                isMaintenance = snap.exists() ? snap.data().maintenance : false;
+                const canPass = myProfile && ROLES[myProfile.role].level >= 5;
+                if (isMaintenance && !canPass) {
+                    document.getElementById('maintenanceScreen').style.display = 'flex';
+                    document.getElementById('app').classList.add('hidden');
+                } else {
+                    document.getElementById('maintenanceScreen').style.display = 'none';
+                    document.getElementById('app').classList.remove('hidden');
+                }
+            });
+
+            onSnapshot(collection(db, 'artifacts', appId, 'public', 'presence'), (snap) => {
+                if (myProfile && ROLES[myProfile.role].level >= 4) renderAdminList(snap.docs.map(d => d.data()));
+            });
+        });
+
+        document.getElementById('googleLoginBtn').onclick = () => {
+            const provider = new GoogleAuthProvider();
+            signInWithPopup(auth, provider).catch(err => console.error("Login Error", err));
+        };
+
+        window.logout = () => signOut(auth);
+
+        function updateUI(user) {
+            document.getElementById('userName').innerText = user.displayName.split(' ')[0];
+            document.getElementById('userIdDisplay').innerText = myProfile.id;
+            document.getElementById('coinCount').innerText = myProfile.coins;
+            const r = ROLES[myProfile.role] || ROLES.MEMBRO;
+            const tag = document.getElementById('myRoleTag');
+            tag.innerText = r.label;
+            tag.className = 'role-tag ' + r.class;
+            if (r.level >= 4) document.getElementById('nav-admin').classList.remove('hidden');
         }
-        init();
+
+        function renderAdminList(users) {
+            const container = document.getElementById('adminPanel');
+            container.innerHTML = `<div class="bg-neutral-900 p-4 rounded-2xl flex justify-between items-center mb-4">
+                <span class="text-xs font-bold uppercase">Manutenção Global</span>
+                <button onclick="toggleMaint()" class="px-4 py-2 bg-white/10 rounded-lg text-[10px] font-black">${isMaintenance ? 'DESATIVAR' : 'ATIVAR'}</button>
+            </div>`;
+
+            users.forEach(u => {
+                const div = document.createElement('div');
+                div.className = "nexus-card p-4 space-y-3";
+                div.innerHTML = `<div class="flex justify-between items-center"><p class="text-xs font-bold">${u.name}</p><button onclick="banUser('${u.uid}')" class="text-red-500 text-[10px] font-bold">BANIR</button></div><div class="flex flex-wrap gap-1" id="roles-${u.uid}"></div>`;
+                container.appendChild(div);
+
+                getDoc(doc(db, 'artifacts', appId, 'users', u.uid, 'profile', 'data')).then(s => {
+                    const currentUrole = s.exists() ? s.data().role : 'MEMBRO';
+                    const roleBox = document.getElementById(`roles-${u.uid}`);
+                    Object.keys(ROLES).forEach(rk => {
+                        const b = document.createElement('button');
+                        b.className = `text-[7px] p-1 rounded ${currentUrole === rk ? 'bg-white text-black' : 'bg-white/5 text-gray-500'}`;
+                        b.innerText = rk;
+                        b.onclick = () => updateDoc(doc(db, 'artifacts', appId, 'users', u.uid, 'profile', 'data'), { role: rk });
+                        roleBox.appendChild(b);
+                    });
+                });
+            });
+        }
+
+        window.toggleMaint = () => setDoc(doc(db, 'artifacts', appId, 'public', 'config'), { maintenance: !isMaintenance });
+        window.banUser = (uid) => setDoc(doc(db, 'artifacts', appId, 'public', 'bans', uid), { bannedAt: Date.now() });
+
+        window.switchTab = (tab) => {
+            document.querySelectorAll('.tab-view').forEach(v => v.classList.add('hidden'));
+            document.getElementById(`view-${tab}`).classList.remove('hidden');
+            document.querySelectorAll('footer button').forEach(b => b.classList.replace('text-purple-500', 'text-gray-600'));
+            document.getElementById(`nav-${tab}`).classList.replace('text-gray-600', 'text-purple-500');
+        };
+
+        // --- GAME ENGINE ---
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        let gameActive = false;
+        let p = { x: 100, y: 100 };
+        let enemies = [];
+        let keys = {};
+
+        window.openGame = () => {
+            document.getElementById('gameOverlay').classList.remove('hidden');
+            gameActive = true;
+            enemies = Array.from({length: 5}, () => ({x: Math.random()*500, y: Math.random()*500}));
+            gameLoop();
+        };
+
+        window.closeGame = () => {
+            document.getElementById('gameOverlay').classList.add('hidden');
+            gameActive = false;
+        };
+
+        function gameLoop() {
+            if (!gameActive) return;
+            canvas.width = canvas.parentElement.clientWidth;
+            canvas.height = canvas.parentElement.clientHeight;
+
+            if (keys.Up) p.y -= 4; if (keys.Down) p.y += 4;
+            if (keys.Left) p.x -= 4; if (keys.Right) p.x += 4;
+
+            ctx.fillStyle = '#050505'; ctx.fillRect(0,0,canvas.width, canvas.height);
+
+            enemies.forEach(en => {
+                ctx.fillStyle = '#ff0000'; ctx.beginPath(); ctx.arc(en.x, en.y, 10, 0, 7); ctx.fill();
+            });
+
+            ctx.fillStyle = '#8b5cf6'; ctx.shadowBlur = 20; ctx.shadowColor = '#8b5cf6';
+            ctx.beginPath(); ctx.arc(p.x, p.y, 15, 0, 7); ctx.fill(); ctx.shadowBlur = 0;
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        const setup = (id, k) => {
+            const b = document.getElementById(id);
+            b.onpointerdown = () => keys[k] = true;
+            b.onpointerup = () => keys[k] = false;
+            b.onpointerleave = () => keys[k] = false;
+        };
+        setup('btn-up','Up'); setup('btn-down','Down'); setup('btn-left','Left'); setup('btn-right','Right');
+
     </script>
 </body>
 </html>
+
